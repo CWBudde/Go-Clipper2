@@ -4,8 +4,8 @@ package clipper
 
 // Pure Go implementation of Clipper2 polygon operations.
 //
-// This implementation uses a Sutherland-Hodgman style clipping algorithm for 
-// RectClip64, which differs from Clipper2's original approach but produces 
+// This implementation uses a Sutherland-Hodgman style clipping algorithm for
+// RectClip64, which differs from Clipper2's original approach but produces
 // compatible results.
 //
 // Key differences from C++ Clipper2:
@@ -40,7 +40,7 @@ func rectClipImpl(rect Path64, paths Paths64) (Paths64, error) {
 	right := rect[0].X
 	top := rect[0].Y
 	bottom := rect[0].Y
-	
+
 	// Find actual bounds from all 4 points (handles any orientation)
 	for _, pt := range rect {
 		if pt.X < left {
@@ -56,7 +56,7 @@ func rectClipImpl(rect Path64, paths Paths64) (Paths64, error) {
 			bottom = pt.Y
 		}
 	}
-	
+
 	// Check for degenerate rectangle (zero area)
 	if left >= right || top >= bottom {
 		return Paths64{}, nil // Empty result for degenerate rectangle
@@ -74,7 +74,7 @@ func rectClipImpl(rect Path64, paths Paths64) (Paths64, error) {
 		if len(path) < 2 {
 			continue // Skip degenerate paths
 		}
-		
+
 		clipped := clipper.clipPath(path)
 		cleaned := cleanPath(clipped)
 		if len(cleaned) >= 2 { // Need at least 2 points for a valid path
@@ -96,7 +96,7 @@ type location uint8
 const (
 	locInside location = iota
 	locLeft
-	locTop  
+	locTop
 	locRight
 	locBottom
 )
@@ -107,7 +107,7 @@ func (rc *rectClipper) getLocation(pt Point64) location {
 		return locLeft
 	}
 	if pt.X > rc.right {
-		return locRight  
+		return locRight
 	}
 	if pt.Y < rc.top {
 		return locTop
@@ -138,28 +138,28 @@ func (rc *rectClipper) clipPath(path Path64) Path64 {
 
 	// Apply Sutherland-Hodgman clipping against each edge
 	clipped := path
-	
+
 	// Clip against left edge
 	clipped = rc.clipAgainstEdge(clipped, locLeft)
 	if len(clipped) == 0 {
 		return nil
 	}
-	
-	// Clip against top edge  
+
+	// Clip against top edge
 	clipped = rc.clipAgainstEdge(clipped, locTop)
 	if len(clipped) == 0 {
 		return nil
 	}
-	
+
 	// Clip against right edge
 	clipped = rc.clipAgainstEdge(clipped, locRight)
 	if len(clipped) == 0 {
 		return nil
 	}
-	
+
 	// Clip against bottom edge
 	clipped = rc.clipAgainstEdge(clipped, locBottom)
-	
+
 	return clipped
 }
 
@@ -170,14 +170,14 @@ func (rc *rectClipper) clipAgainstEdge(path Path64, edge location) Path64 {
 	}
 
 	var result Path64
-	
+
 	for i := 0; i < len(path); i++ {
 		curr := path[i]
 		prev := path[(i+len(path)-1)%len(path)]
-		
+
 		currInside := rc.isInsideEdge(curr, edge)
 		prevInside := rc.isInsideEdge(prev, edge)
-		
+
 		if currInside {
 			if !prevInside {
 				// Entering: add intersection then current point
@@ -194,7 +194,7 @@ func (rc *rectClipper) clipAgainstEdge(path Path64, edge location) Path64 {
 		}
 		// Both outside: add nothing
 	}
-	
+
 	return result
 }
 
@@ -231,32 +231,48 @@ func (rc *rectClipper) getIntersection(p1, p2 Point64, edge location) (Point64, 
 }
 
 // intersectWithVerticalLine finds intersection with vertical line x = lineX
+// Uses more robust arithmetic to avoid precision issues
 func (rc *rectClipper) intersectWithVerticalLine(p1, p2 Point64, lineX int64) (Point64, bool) {
 	if p1.X == p2.X {
 		return Point64{}, false // Line is vertical, no intersection
 	}
-	
-	// Linear interpolation to find intersection
+
+	// Use integer arithmetic when possible for better precision
 	dx := p2.X - p1.X
 	dy := p2.Y - p1.Y
-	t := float64(lineX-p1.X) / float64(dx)
-	
-	y := float64(p1.Y) + t*float64(dy)
+
+	// Calculate y = p1.Y + dy * (lineX - p1.X) / dx
+	// Use 128-bit intermediate to avoid overflow
+	numerator := NewInt128(dy).Mul64(lineX - p1.X)
+	denominator := dx
+
+	// Convert to float64 for final division (still more precise than original)
+	t := numerator.ToFloat64() / float64(denominator)
+	y := float64(p1.Y) + t
+
 	return Point64{X: lineX, Y: int64(y + 0.5)}, true // Round to nearest integer
 }
 
-// intersectWithHorizontalLine finds intersection with horizontal line y = lineY  
+// intersectWithHorizontalLine finds intersection with horizontal line y = lineY
+// Uses more robust arithmetic to avoid precision issues
 func (rc *rectClipper) intersectWithHorizontalLine(p1, p2 Point64, lineY int64) (Point64, bool) {
 	if p1.Y == p2.Y {
 		return Point64{}, false // Line is horizontal, no intersection
 	}
-	
-	// Linear interpolation to find intersection
-	dx := p2.X - p1.X  
+
+	// Use integer arithmetic when possible for better precision
+	dx := p2.X - p1.X
 	dy := p2.Y - p1.Y
-	t := float64(lineY-p1.Y) / float64(dy)
-	
-	x := float64(p1.X) + t*float64(dx)
+
+	// Calculate x = p1.X + dx * (lineY - p1.Y) / dy
+	// Use 128-bit intermediate to avoid overflow
+	numerator := NewInt128(dx).Mul64(lineY - p1.Y)
+	denominator := dy
+
+	// Convert to float64 for final division (still more precise than original)
+	t := numerator.ToFloat64() / float64(denominator)
+	x := float64(p1.X) + t
+
 	return Point64{X: int64(x + 0.5), Y: lineY}, true // Round to nearest integer
 }
 
@@ -265,11 +281,11 @@ func cleanPath(path Path64) Path64 {
 	if len(path) <= 1 {
 		return path
 	}
-	
+
 	var cleaned Path64
 	prev := path[0]
 	cleaned = append(cleaned, prev)
-	
+
 	for i := 1; i < len(path); i++ {
 		curr := path[i]
 		if curr.X != prev.X || curr.Y != prev.Y { // Only add if different from previous
@@ -277,26 +293,22 @@ func cleanPath(path Path64) Path64 {
 			prev = curr
 		}
 	}
-	
+
 	// Remove final duplicate if path is closed and first/last points are same
 	if len(cleaned) > 2 && cleaned[0].X == cleaned[len(cleaned)-1].X && cleaned[0].Y == cleaned[len(cleaned)-1].Y {
 		cleaned = cleaned[:len(cleaned)-1]
 	}
-	
+
 	return cleaned
 }
 
-// areaImpl calculates area using basic polygon area formula
+// areaImpl calculates area using robust 128-bit arithmetic
 func areaImpl(path Path64) float64 {
 	if len(path) < 3 {
 		return 0.0
 	}
-	
-	area := 0.0
-	for i := 0; i < len(path); i++ {
-		j := (i + 1) % len(path)
-		area += float64(path[i].X * path[j].Y)
-		area -= float64(path[j].X * path[i].Y)
-	}
-	return area / 2.0
+
+	// Use robust 128-bit area calculation
+	area128 := Area128(path)
+	return area128.ToFloat64() / 2.0
 }

@@ -18,7 +18,7 @@ type ClipType uint8
 
 const (
 	Intersection ClipType = iota // intersect subject and clip polygons
-	Union                        // union (OR) subject and clip polygons  
+	Union                        // union (OR) subject and clip polygons
 	Difference                   // subtract clip polygons from subject polygons
 	Xor                          // exclusively or (XOR) subject and clip polygons
 )
@@ -28,7 +28,7 @@ type FillRule uint8
 
 const (
 	EvenOdd  FillRule = iota // odd numbered sub-regions are filled
-	NonZero                  // non-zero sub-regions are filled  
+	NonZero                  // non-zero sub-regions are filled
 	Positive                 // positive sub-regions are filled
 	Negative                 // negative sub-regions are filled
 )
