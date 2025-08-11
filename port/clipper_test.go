@@ -154,3 +154,320 @@ func TestRectClip64(t *testing.T) {
 	}
 	t.Logf("RectClip result: %v", result)
 }
+
+func TestBooleanOp64Direct(t *testing.T) {
+	subject := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
+	clip := Paths64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}}
+
+	result, resultOpen, err := BooleanOp64(Union, NonZero, subject, nil, clip)
+	if err == ErrNotImplemented {
+		t.Skip("BooleanOp64 not yet implemented in pure Go")
+	}
+	if err != nil {
+		t.Fatalf("BooleanOp64 failed: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Fatal("Expected non-empty result from boolean operation")
+	}
+	if len(resultOpen) != 0 {
+		t.Fatal("Expected empty open result for closed polygon operation")
+	}
+	t.Logf("BooleanOp64 result: %v", result)
+}
+
+func TestRectClip64InvalidRectangle(t *testing.T) {
+	// Test with invalid rectangle (not 4 points)
+	invalidRect := Path64{{0, 0}, {10, 0}, {10, 10}} // Only 3 points
+	paths := Paths64{{{-5, -5}, {5, -5}, {5, 5}, {-5, 5}}}
+	
+	_, err := RectClip64(invalidRect, paths)
+	if err != ErrInvalidRectangle {
+		t.Errorf("Expected ErrInvalidRectangle, got %v", err)
+	}
+}
+
+func TestArea64EmptyPath(t *testing.T) {
+	// Test with empty path
+	emptyPath := Path64{}
+	area := Area64(emptyPath)
+	if area != 0.0 {
+		t.Errorf("Expected area of empty path to be 0, got %v", area)
+	}
+
+	// Test with path with less than 3 points
+	smallPath := Path64{{0, 0}, {1, 1}}
+	area = Area64(smallPath)
+	if area != 0.0 {
+		t.Errorf("Expected area of 2-point path to be 0, got %v", area)
+	}
+}
+
+func TestInflatePaths64WithOptions(t *testing.T) {
+	square := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
+	options := OffsetOptions{
+		MiterLimit:   4.0,
+		ArcTolerance: 0.1,
+	}
+
+	result, err := InflatePaths64(square, 1.0, Miter, ClosedPolygon, options)
+	if err == ErrNotImplemented {
+		t.Skip("InflatePaths64 not yet implemented")
+	}
+	if err != nil {
+		t.Fatalf("InflatePaths64 with options failed: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Fatal("Expected non-empty result from inflate with options")
+	}
+	t.Logf("Inflate with options result: %v", result)
+}
+
+func TestRectClip64EdgeCases(t *testing.T) {
+	// Test case 1: Degenerate rectangle (zero width)
+	degenerateRect := Path64{{10, 10}, {10, 10}, {10, 20}, {10, 20}}
+	paths := Paths64{{{0, 0}, {5, 0}, {5, 5}, {0, 5}}}
+	
+	result, err := RectClip64(degenerateRect, paths)
+	if err != nil {
+		t.Fatalf("RectClip64 with degenerate rect failed: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("Expected empty result for degenerate rectangle, got %v", result)
+	}
+	
+	// Test case 2: Path completely outside rectangle
+	rect := Path64{{0, 0}, {5, 0}, {5, 5}, {0, 5}}
+	outsidePath := Paths64{{{10, 10}, {15, 10}, {15, 15}, {10, 15}}}
+	
+	result, err = RectClip64(rect, outsidePath)
+	if err != nil {
+		t.Fatalf("RectClip64 with outside path failed: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("Expected empty result for outside path, got %v", result)
+	}
+	
+	// Test case 3: Path completely inside rectangle  
+	insidePath := Paths64{{{1, 1}, {2, 1}, {2, 2}, {1, 2}}}
+	
+	result, err = RectClip64(rect, insidePath)
+	if err != nil {
+		t.Fatalf("RectClip64 with inside path failed: %v", err)
+	}
+	if len(result) != 1 || len(result[0]) != 4 {
+		t.Errorf("Expected inside path to be unchanged, got %v", result)
+	}
+	
+	// Test case 4: Path partially intersecting rectangle
+	crossingPath := Paths64{{{-1, 2}, {3, 2}, {3, 7}, {-1, 7}}}
+	
+	result, err = RectClip64(rect, crossingPath)
+	if err != nil {
+		t.Fatalf("RectClip64 with crossing path failed: %v", err)
+	}
+	if len(result) == 0 {
+		t.Errorf("Expected non-empty result for crossing path, got empty")
+	}
+	t.Logf("Crossing path clipped result: %v", result)
+	
+	// Test case 5: Empty paths input
+	emptyPaths := Paths64{}
+	
+	result, err = RectClip64(rect, emptyPaths)
+	if err != nil {
+		t.Fatalf("RectClip64 with empty paths failed: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("Expected empty result for empty paths input, got %v", result)
+	}
+	
+	// Test case 6: Paths with degenerate segments (single points, collinear points)
+	degeneratePaths := Paths64{
+		{{1, 1}}, // Single point - should be skipped
+		{{1, 1}, {1, 1}, {1, 1}}, // All same point - should be skipped  
+		{{1, 1}, {3, 3}}, // Valid 2-point segment
+	}
+	
+	result, err = RectClip64(rect, degeneratePaths)
+	if err != nil {
+		t.Fatalf("RectClip64 with degenerate paths failed: %v", err)
+	}
+	t.Logf("Degenerate paths clipped result: %v", result)
+}
+
+func TestRectClip64PointsOnBoundary(t *testing.T) {
+	// Rectangle from (0,0) to (10,10)
+	rect := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+	
+	// Test case 1: Path with points exactly on rectangle boundary
+	boundaryPath := Paths64{{{0, 5}, {5, 0}, {10, 5}, {5, 10}}}
+	
+	result, err := RectClip64(rect, boundaryPath)
+	if err != nil {
+		t.Fatalf("RectClip64 with boundary points failed: %v", err)
+	}
+	if len(result) == 0 {
+		t.Errorf("Expected non-empty result for boundary path")
+	}
+	t.Logf("Boundary path result: %v", result)
+	
+	// Test case 2: Path touching corner
+	cornerPath := Paths64{{{0, 0}, {-5, -5}, {5, -5}}}
+	
+	result, err = RectClip64(rect, cornerPath)
+	if err != nil {
+		t.Fatalf("RectClip64 with corner touching path failed: %v", err)
+	}
+	t.Logf("Corner touching path result: %v", result)
+}
+
+func TestRectClip64RandomOrientedRectangle(t *testing.T) {
+	// Test with rectangle points in different order (counter-clockwise)
+	rect := Path64{{0, 10}, {0, 0}, {10, 0}, {10, 10}} // CCW order
+	paths := Paths64{{{2, 2}, {8, 2}, {8, 8}, {2, 8}}}
+	
+	result, err := RectClip64(rect, paths)
+	if err != nil {
+		t.Fatalf("RectClip64 with CCW rectangle failed: %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("Expected 1 clipped path, got %d", len(result))
+	}
+	t.Logf("CCW rectangle result: %v", result)
+	
+	// Test with rectangle points in random order
+	randomRect := Path64{{10, 0}, {0, 10}, {10, 10}, {0, 0}}
+	
+	result, err = RectClip64(randomRect, paths)
+	if err != nil {
+		t.Fatalf("RectClip64 with random order rectangle failed: %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("Expected 1 clipped path, got %d", len(result))
+	}
+	t.Logf("Random order rectangle result: %v", result)
+}
+
+func TestRectClip64RandomPaths(t *testing.T) {
+	// Test with various random rectangles and paths
+	testCases := []struct {
+		name     string
+		rect     Path64
+		paths    Paths64
+		expected string // Description of expected behavior
+	}{
+		{
+			"Small rectangle, large path",
+			Path64{{5, 5}, {15, 5}, {15, 15}, {5, 15}},
+			Paths64{{{0, 0}, {20, 0}, {20, 20}, {0, 20}}},
+			"path should be clipped to rectangle bounds",
+		},
+		{
+			"Rectangle with negative coordinates", 
+			Path64{{-10, -10}, {10, -10}, {10, 10}, {-10, 10}},
+			Paths64{{{-15, -5}, {15, -5}, {15, 5}, {-15, 5}}},
+			"should handle negative coordinates correctly",
+		},
+		{
+			"Multiple paths, some inside, some outside",
+			Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}},
+			Paths64{
+				{{1, 1}, {2, 1}, {2, 2}, {1, 2}}, // Inside
+				{{11, 11}, {12, 11}, {12, 12}, {11, 12}}, // Outside
+				{{-1, 5}, {5, 5}, {5, 8}, {-1, 8}}, // Crossing
+			},
+			"should return inside and crossing paths only",
+		},
+		{
+			"Complex polygon crossing rectangle",
+			Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}},
+			Paths64{{{-2, -2}, {12, -2}, {12, 2}, {8, 2}, {8, 8}, {12, 8}, {12, 12}, {-2, 12}}},
+			"should clip complex polygon correctly",
+		},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := RectClip64(tc.rect, tc.paths)
+			if err != nil {
+				t.Fatalf("RectClip64 failed for %s: %v", tc.name, err)
+			}
+			
+			t.Logf("%s - Input paths: %v", tc.name, tc.paths)
+			t.Logf("%s - Result: %v", tc.name, result)
+			t.Logf("%s - Expected: %s", tc.name, tc.expected)
+			
+			// Basic validation - result should not contain points outside rectangle bounds
+			left, right, top, bottom := getBounds(tc.rect)
+			for _, path := range result {
+				for _, pt := range path {
+					if pt.X < left || pt.X > right || pt.Y < top || pt.Y > bottom {
+						t.Errorf("Result contains point outside rectangle bounds: %v", pt)
+					}
+				}
+			}
+		})
+	}
+}
+
+// getBounds extracts the bounding box from a rectangle path
+func getBounds(rect Path64) (left, right, top, bottom int64) {
+	if len(rect) == 0 {
+		return 0, 0, 0, 0
+	}
+	
+	left = rect[0].X
+	right = rect[0].X
+	top = rect[0].Y
+	bottom = rect[0].Y
+	
+	for _, pt := range rect {
+		if pt.X < left {
+			left = pt.X
+		}
+		if pt.X > right {
+			right = pt.X
+		}
+		if pt.Y < top {
+			top = pt.Y
+		}
+		if pt.Y > bottom {
+			bottom = pt.Y
+		}
+	}
+	
+	return left, right, top, bottom
+}
+
+func TestRectClip64StressTest(t *testing.T) {
+	// Stress test with many small rectangles
+	baseRect := Path64{{0, 0}, {100, 0}, {100, 100}, {0, 100}}
+	
+	// Generate many small paths within and outside the rectangle
+	var paths Paths64
+	for i := 0; i < 50; i++ {
+		x := int64(i*2 - 10) // Some negative, some positive
+		y := int64(i*2 - 10)
+		paths = append(paths, Path64{
+			{x, y}, {x + 5, y}, {x + 5, y + 5}, {x, y + 5},
+		})
+	}
+	
+	result, err := RectClip64(baseRect, paths)
+	if err != nil {
+		t.Fatalf("Stress test failed: %v", err)
+	}
+	
+	t.Logf("Stress test: Input %d paths, output %d paths", len(paths), len(result))
+	
+	// Verify all resulting points are within bounds
+	for _, path := range result {
+		for _, pt := range path {
+			if pt.X < 0 || pt.X > 100 || pt.Y < 0 || pt.Y > 100 {
+				t.Errorf("Stress test: Point outside bounds: %v", pt)
+			}
+		}
+	}
+}

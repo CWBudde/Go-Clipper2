@@ -1,3 +1,3 @@
-module github.com/you/clipper2-go
+module github.com/go-clipper/clipper2
 
 go 1.23.3
