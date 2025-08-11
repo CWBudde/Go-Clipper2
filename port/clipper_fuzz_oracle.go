@@ -11,15 +11,15 @@ func rectClipOracleImpl(rect Path64, paths Paths64) (Paths64, error) {
 	for i, pt := range rect {
 		capiRect[i] = capi.Point64{X: pt.X, Y: pt.Y}
 	}
-	
+
 	capiPaths := pathsToCAPI(paths)
-	
+
 	// Call CAPI RectClip64
 	result, err := capi.RectClip64(capiRect, capiPaths)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert back to port types
 	return pathsFromCAPI(result), nil
 }

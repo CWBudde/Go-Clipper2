@@ -12,16 +12,17 @@ import (
 // This test aims to achieve ≥99% match rate between implementations as required for M1.
 //
 // Usage:
-//   Pure Go mode (self-consistency):  go test -fuzz=FuzzRectClip64 -fuzztime=30s
-//   Oracle mode (full validation):    go test -tags=clipper_cgo -fuzz=FuzzRectClip64 -fuzztime=30s
+//
+//	Pure Go mode (self-consistency):  go test -fuzz=FuzzRectClip64 -fuzztime=30s
+//	Oracle mode (full validation):    go test -tags=clipper_cgo -fuzz=FuzzRectClip64 -fuzztime=30s
 //
 // The test generates random rectangles and paths, clips them using both implementations,
 // and compares results. It tracks match rates and provides detailed failure analysis.
 func FuzzRectClip64(f *testing.F) {
 	// Seed corpus with representative test cases
 	seedTestCases := []struct {
-		name string
-		rect [4][2]int64  // Rectangle as [4][2]int64 for fuzz compatibility
+		name  string
+		rect  [4][2]int64 // Rectangle as [4][2]int64 for fuzz compatibility
 		paths [][]Point64 // Paths for fuzzing
 	}{
 		{
@@ -30,7 +31,7 @@ func FuzzRectClip64(f *testing.F) {
 			[][]Point64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}},
 		},
 		{
-			"CompletelyInside", 
+			"CompletelyInside",
 			[4][2]int64{{0, 0}, {20, 0}, {20, 20}, {0, 20}},
 			[][]Point64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}},
 		},
@@ -70,16 +71,16 @@ func FuzzRectClip64(f *testing.F) {
 	for _, tc := range seedTestCases {
 		// Flatten paths into a format suitable for fuzzing
 		var flatPaths []byte
-		
+
 		// Encode number of paths
 		numPaths := len(tc.paths)
 		flatPaths = append(flatPaths, byte(numPaths))
-		
+
 		for _, path := range tc.paths {
 			// Encode number of points in path
 			numPoints := len(path)
 			flatPaths = append(flatPaths, byte(numPoints))
-			
+
 			// Encode each point (16 bytes: 8 for X, 8 for Y)
 			for _, pt := range path {
 				xBytes := (*[8]byte)(unsafe.Pointer(&pt.X))[:]
@@ -88,7 +89,7 @@ func FuzzRectClip64(f *testing.F) {
 				flatPaths = append(flatPaths, yBytes...)
 			}
 		}
-		
+
 		// Add to fuzz corpus
 		rectBytes := (*[32]byte)(unsafe.Pointer(&tc.rect))[:]
 		f.Add(rectBytes[:], flatPaths)
@@ -99,10 +100,10 @@ func FuzzRectClip64(f *testing.F) {
 	var mismatches int
 	var pureErrors int
 	var oracleErrors int
-	
+
 	f.Fuzz(func(t *testing.T, rectData []byte, pathsData []byte) {
 		totalTests++
-		
+
 		// Skip if input data is too small
 		if len(rectData) < 32 { // 4 points × 2 coords × 8 bytes
 			return
@@ -113,10 +114,10 @@ func FuzzRectClip64(f *testing.F) {
 
 		// Parse rectangle from bytes
 		rect := parseRectFromBytes(rectData)
-		
-		// Parse paths from bytes  
+
+		// Parse paths from bytes
 		paths := parsePathsFromBytes(pathsData)
-		
+
 		// Skip extreme cases that would cause overflow
 		if !isValidInput(rect, paths) {
 			return
@@ -124,10 +125,10 @@ func FuzzRectClip64(f *testing.F) {
 
 		// Test pure Go implementation
 		pureResult, pureErr := RectClip64(rect, paths)
-		
+
 		// Test CGO oracle implementation (only when CGO build tag is active)
 		oracleResult, oracleErr := rectClipOracle(rect, paths)
-		
+
 		// Handle error cases
 		if pureErr != nil && oracleErr != nil {
 			// Both failed - this is acceptable for some invalid inputs
@@ -139,13 +140,13 @@ func FuzzRectClip64(f *testing.F) {
 			}
 			return
 		}
-		
+
 		if pureErr != nil {
 			pureErrors++
 			t.Logf("Pure implementation error: %v (Input: rect=%v, paths=%v)", pureErr, rect, paths)
 			return
 		}
-		
+
 		if oracleErr != nil {
 			oracleErrors++
 			t.Logf("Oracle implementation error: %v (Input: rect=%v, paths=%v)", oracleErr, rect, paths)
@@ -157,7 +158,7 @@ func FuzzRectClip64(f *testing.F) {
 			matches++
 		} else {
 			mismatches++
-			
+
 			// Log detailed mismatch for analysis (but only first few to avoid spam)
 			if mismatches <= 10 {
 				t.Logf("MISMATCH #%d:", mismatches)
@@ -166,7 +167,7 @@ func FuzzRectClip64(f *testing.F) {
 				t.Logf("  Pure result (%d paths): %v", len(pureResult), pureResult)
 				t.Logf("  Oracle result (%d paths): %v", len(oracleResult), oracleResult)
 			}
-			
+
 			// Only fail the test if mismatch rate is too high AND we have real oracle (CGO mode)
 			if totalTests > 100 && isRealOracleMode() {
 				matchRate := float64(matches) / float64(totalTests) * 100
@@ -183,10 +184,10 @@ func FuzzRectClip64(f *testing.F) {
 			if isRealOracleMode() {
 				mode = "pure-vs-cgo-oracle"
 			}
-			t.Logf("Progress: %d tests (%s), %.2f%% match rate, %d mismatches, %d pure errors, %d oracle errors", 
+			t.Logf("Progress: %d tests (%s), %.2f%% match rate, %d mismatches, %d pure errors, %d oracle errors",
 				totalTests, mode, matchRate, mismatches, pureErrors, oracleErrors)
 		}
-		
+
 		// Final report
 		if totalTests > 0 && (totalTests%10000 == 0 || totalTests == 1) {
 			matchRate := float64(matches) / float64(totalTests) * 100
@@ -222,20 +223,20 @@ func isRealOracleMode() bool {
 func parseRectFromBytes(data []byte) Path64 {
 	// Extract 4 points from byte data
 	rect := make(Path64, 4)
-	
+
 	for i := 0; i < 4 && (i*16+15) < len(data); i++ {
 		// Extract X coordinate (8 bytes)
 		x := *(*int64)(unsafe.Pointer(&data[i*16]))
-		// Extract Y coordinate (8 bytes)  
+		// Extract Y coordinate (8 bytes)
 		y := *(*int64)(unsafe.Pointer(&data[i*16+8]))
-		
+
 		// Constrain to reasonable range to avoid overflow
 		x = constrainCoordinate(x)
 		y = constrainCoordinate(y)
-		
+
 		rect[i] = Point64{X: x, Y: y}
 	}
-	
+
 	return rect
 }
 
@@ -244,14 +245,14 @@ func parsePathsFromBytes(data []byte) Paths64 {
 	if len(data) == 0 {
 		return Paths64{}
 	}
-	
+
 	paths := Paths64{}
 	offset := 0
-	
+
 	// Read number of paths (limited to reasonable count)
 	numPaths := int(data[0]) % 21 // Limit to 0-20 paths
 	offset++
-	
+
 	for p := 0; p < numPaths && offset < len(data); p++ {
 		// Read number of points in this path
 		if offset >= len(data) {
@@ -259,34 +260,34 @@ func parsePathsFromBytes(data []byte) Paths64 {
 		}
 		numPoints := int(data[offset]) % 51 // Limit to 0-50 points per path
 		offset++
-		
+
 		if numPoints < 2 { // Skip paths with fewer than 2 points
 			continue
 		}
-		
+
 		path := make(Path64, 0, numPoints)
-		
+
 		for i := 0; i < numPoints && offset+15 < len(data); i++ {
 			// Read X coordinate (8 bytes)
 			x := *(*int64)(unsafe.Pointer(&data[offset]))
 			offset += 8
-			
+
 			// Read Y coordinate (8 bytes)
 			y := *(*int64)(unsafe.Pointer(&data[offset]))
 			offset += 8
-			
+
 			// Constrain coordinates
 			x = constrainCoordinate(x)
 			y = constrainCoordinate(y)
-			
+
 			path = append(path, Point64{X: x, Y: y})
 		}
-		
+
 		if len(path) >= 2 {
 			paths = append(paths, path)
 		}
 	}
-	
+
 	return paths
 }
 
@@ -294,7 +295,7 @@ func parsePathsFromBytes(data []byte) Paths64 {
 func constrainCoordinate(coord int64) int64 {
 	const maxCoord = 1e9
 	const minCoord = -1e9
-	
+
 	if coord > maxCoord {
 		return maxCoord
 	}
@@ -312,7 +313,7 @@ func isValidInput(rect Path64, paths Paths64) bool {
 			return false
 		}
 	}
-	
+
 	for _, path := range paths {
 		for _, pt := range path {
 			if pt.X == math.MinInt64 || pt.Y == math.MinInt64 {
@@ -320,7 +321,7 @@ func isValidInput(rect Path64, paths Paths64) bool {
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -329,17 +330,17 @@ func pathsetsEqual(a, b Paths64) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	
+
 	// Sort both pathsets for comparison (since order may vary)
 	aSorted := sortPathsForComparison(a)
 	bSorted := sortPathsForComparison(b)
-	
+
 	for i := range aSorted {
 		if !pathsEqual(aSorted[i], bSorted[i]) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -348,30 +349,30 @@ func pathsEqual(a, b Path64) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	
+
 	if len(a) == 0 {
 		return true
 	}
-	
+
 	// Try to find matching starting point (paths may start at different indices)
 	for offset := 0; offset < len(a); offset++ {
 		if pathsEqualWithOffset(a, b, offset) {
 			return true
 		}
 	}
-	
+
 	// Try reverse order as well
 	bReversed := make(Path64, len(b))
 	for i, j := 0, len(b)-1; i < len(b); i, j = i+1, j-1 {
 		bReversed[i] = b[j]
 	}
-	
+
 	for offset := 0; offset < len(a); offset++ {
 		if pathsEqualWithOffset(a, bReversed, offset) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -396,10 +397,10 @@ func sortPathsForComparison(paths Paths64) Paths64 {
 	if len(paths) <= 1 {
 		return paths
 	}
-	
+
 	sorted := make(Paths64, len(paths))
 	copy(sorted, paths)
-	
+
 	sort.Slice(sorted, func(i, j int) bool {
 		if len(sorted[i]) == 0 && len(sorted[j]) == 0 {
 			return false
@@ -410,14 +411,14 @@ func sortPathsForComparison(paths Paths64) Paths64 {
 		if len(sorted[j]) == 0 {
 			return false
 		}
-		
+
 		// Compare first points
 		if sorted[i][0].X != sorted[j][0].X {
 			return sorted[i][0].X < sorted[j][0].X
 		}
 		return sorted[i][0].Y < sorted[j][0].Y
 	})
-	
+
 	return sorted
 }
 

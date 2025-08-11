@@ -1,0 +1,35 @@
+version = "2"
+
+[run]
+timeout = "5m"
+tests = true
+
+[linters]
+default = "standard"
+enable = [
+  "misspell",
+  "gocritic"
+]
+disable = [
+  "depguard",  # too restrictive for small projects
+  "errcheck"
+]
+
+[linters.exclusions]
+generated = "strict"
+
+[[linters.exclusions.rules]]
+# safe to ignore in initialization code
+linters = ["errcheck"]
+text = "viper.Bind"
+
+[[linters.exclusions.rules]]
+# idiomatic viper usage
+path = "cmd/.*\\.go"
+linters = ["gochecknoinits", "gochecknoglobals"]
+
+[linters.settings]
+
+[linters.settings.gocritic]
+enabled-tags = ["diagnostic", "style", "performance"]
+disabled-checks = ["commentedOutCode", "unnamedResult", "importShadow", "dupImport", "dupSubExpr"]

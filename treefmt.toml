@@ -1,0 +1,25 @@
+[formatter.go]
+command = "gofmt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.toml]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]
+excludes = [".golangci.toml"]
+
+[formatter.markdown]
+command = "prettier"
+options = ["--write", "--prose-wrap", "always"]
+includes = ["*.md"]
+
+[formatter.yaml]
+command = "prettier"
+options = ["--write"]
+includes = ["*.yaml", "*.yml"]
+
+[formatter.json]
+command = "prettier"
+options = ["--write"]
+includes = ["*.json"]

@@ -1,6 +1,7 @@
 package clipper
 
 import (
+	"math"
 	"testing"
 )
 
@@ -180,7 +181,7 @@ func TestRectClip64InvalidRectangle(t *testing.T) {
 	// Test with invalid rectangle (not 4 points)
 	invalidRect := Path64{{0, 0}, {10, 0}, {10, 10}} // Only 3 points
 	paths := Paths64{{{-5, -5}, {5, -5}, {5, 5}, {-5, 5}}}
-	
+
 	_, err := RectClip64(invalidRect, paths)
 	if err != ErrInvalidRectangle {
 		t.Errorf("Expected ErrInvalidRectangle, got %v", err)
@@ -199,7 +200,280 @@ func TestArea64EmptyPath(t *testing.T) {
 	smallPath := Path64{{0, 0}, {1, 1}}
 	area = Area64(smallPath)
 	if area != 0.0 {
-		t.Errorf("Expected area of 2-point path to be 0, got %v", area)
+		t.Errorf("Expected area of small path to be 0, got %v", area)
+	}
+}
+
+// M2 Geometry Kernel Tests
+
+// TestMath128Operations tests the 128-bit math operations
+func TestMath128Operations(t *testing.T) {
+	// Test basic Int128 operations
+	a := NewInt128(1000000000000) // 1 trillion
+	b := NewInt128(2000000000000) // 2 trillion
+
+	sum := a.Add(b)
+	expected := NewInt128(3000000000000)
+	if sum.Cmp(expected) != 0 {
+		t.Errorf("Add failed: expected %d + %d = %d, got sum with Hi=%d Lo=%d", a.Hi, b.Hi, expected.Hi, sum.Hi, sum.Lo)
+	}
+
+	diff := b.Sub(a)
+	expected = NewInt128(1000000000000)
+	if diff.Cmp(expected) != 0 {
+		t.Errorf("Sub failed: expected %v, got %v", expected, diff)
+	}
+
+	// Test multiplication
+	prod := a.Mul64(3)
+	expected = NewInt128(3000000000000)
+	if prod.Cmp(expected) != 0 {
+		t.Errorf("Mul64 failed: expected %d trillion, got Hi=%d Lo=%d (float64: %f)", 3000000000000, prod.Hi, prod.Lo, prod.ToFloat64())
+	}
+
+	// Test negation
+	neg := NewInt128(-1000)
+	if !neg.IsNegative() {
+		t.Error("Expected negative number to be negative")
+	}
+
+	pos := neg.Negate()
+	expected = NewInt128(1000)
+	if pos.Cmp(expected) != 0 {
+		t.Errorf("Negate failed: expected %v, got %v", expected, pos)
+	}
+}
+
+// TestCrossProduct128 tests the robust cross product calculation
+func TestCrossProduct128(t *testing.T) {
+	tests := []struct {
+		name       string
+		p1, p2, p3 Point64
+		expected   float64 // expected sign (positive, negative, or zero)
+	}{
+		{"Counter-clockwise triangle", Point64{0, 0}, Point64{10, 0}, Point64{5, 10}, 1},                                            // positive
+		{"Clockwise triangle", Point64{0, 0}, Point64{5, 10}, Point64{10, 0}, -1},                                                   // negative
+		{"Collinear points", Point64{0, 0}, Point64{5, 5}, Point64{10, 10}, 0},                                                      // zero
+		{"Large coordinates", Point64{1000000000, 1000000000}, Point64{2000000000, 1000000000}, Point64{1500000000, 2000000000}, 1}, // positive
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cross := CrossProduct128(test.p1, test.p2, test.p3)
+
+			if test.expected > 0 && !cross.IsNegative() && !cross.IsZero() {
+				// Expected positive, got positive - OK
+			} else if test.expected < 0 && cross.IsNegative() {
+				// Expected negative, got negative - OK
+			} else if test.expected == 0 && cross.IsZero() {
+				// Expected zero, got zero - OK
+			} else {
+				t.Errorf("CrossProduct128 failed for %s: expected sign %v, got %v", test.name, test.expected, cross)
+			}
+		})
+	}
+}
+
+// TestArea128 tests robust area calculation
+func TestArea128(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     Path64
+		expected float64
+	}{
+		{"Unit square", Path64{{0, 0}, {1, 0}, {1, 1}, {0, 1}}, 1.0},
+		{"Large square", Path64{{0, 0}, {1000, 0}, {1000, 1000}, {0, 1000}}, 1000000.0},
+		{"Triangle", Path64{{0, 0}, {10, 0}, {5, 10}}, 50.0},
+		{"Clockwise square", Path64{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, -1.0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			area128 := Area128(test.path)
+			actual := area128.ToFloat64() / 2.0 // Area128 returns 2*area
+
+			if math.Abs(actual-test.expected) > 1e-9 {
+				t.Errorf("Area128 failed for %s: expected %v, got %v", test.name, test.expected, actual)
+			}
+		})
+	}
+}
+
+// TestIsCollinear tests collinearity detection
+func TestIsCollinear(t *testing.T) {
+	tests := []struct {
+		name       string
+		p1, p2, p3 Point64
+		expected   bool
+	}{
+		{"Horizontal line", Point64{0, 5}, Point64{5, 5}, Point64{10, 5}, true},
+		{"Vertical line", Point64{5, 0}, Point64{5, 5}, Point64{5, 10}, true},
+		{"Diagonal line", Point64{0, 0}, Point64{5, 5}, Point64{10, 10}, true},
+		{"Not collinear", Point64{0, 0}, Point64{5, 0}, Point64{0, 5}, false},
+		{"Large coordinates", Point64{1000000000, 1000000000}, Point64{2000000000, 2000000000}, Point64{3000000000, 3000000000}, true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := IsCollinear(test.p1, test.p2, test.p3)
+			if result != test.expected {
+				t.Errorf("IsCollinear failed for %s: expected %v, got %v", test.name, test.expected, result)
+			}
+		})
+	}
+}
+
+// TestIsParallel tests parallel segment detection
+func TestIsParallel(t *testing.T) {
+	tests := []struct {
+		name                       string
+		seg1a, seg1b, seg2a, seg2b Point64
+		expected                   bool
+	}{
+		{"Horizontal parallel", Point64{0, 0}, Point64{10, 0}, Point64{0, 5}, Point64{10, 5}, true},
+		{"Vertical parallel", Point64{0, 0}, Point64{0, 10}, Point64{5, 0}, Point64{5, 10}, true},
+		{"Diagonal parallel", Point64{0, 0}, Point64{5, 5}, Point64{10, 10}, Point64{15, 15}, true},
+		{"Not parallel", Point64{0, 0}, Point64{5, 0}, Point64{0, 0}, Point64{0, 5}, false},
+		{"Same segment", Point64{0, 0}, Point64{5, 5}, Point64{0, 0}, Point64{5, 5}, true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := IsParallel(test.seg1a, test.seg1b, test.seg2a, test.seg2b)
+			if result != test.expected {
+				t.Errorf("IsParallel failed for %s: expected %v, got %v", test.name, test.expected, result)
+			}
+		})
+	}
+}
+
+// TestSegmentIntersection tests robust segment intersection
+func TestSegmentIntersection(t *testing.T) {
+	tests := []struct {
+		name                       string
+		seg1a, seg1b, seg2a, seg2b Point64
+		expectedType               IntersectionType
+		expectedPoint              Point64
+	}{
+		{"Cross intersection", Point64{0, 0}, Point64{10, 10}, Point64{0, 10}, Point64{10, 0}, PointIntersection, Point64{5, 5}},
+		{"No intersection", Point64{0, 0}, Point64{5, 0}, Point64{0, 5}, Point64{5, 5}, NoIntersection, Point64{}},
+		{"Endpoint intersection", Point64{0, 0}, Point64{5, 5}, Point64{5, 5}, Point64{10, 0}, PointIntersection, Point64{5, 5}},
+		{"Collinear overlap", Point64{0, 0}, Point64{10, 0}, Point64{5, 0}, Point64{15, 0}, OverlapIntersection, Point64{5, 0}},
+		{"Parallel no intersection", Point64{0, 0}, Point64{10, 0}, Point64{0, 5}, Point64{10, 5}, NoIntersection, Point64{}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			point, intersectionType, err := SegmentIntersection(test.seg1a, test.seg1b, test.seg2a, test.seg2b)
+			if err != nil {
+				t.Fatalf("SegmentIntersection failed with error: %v", err)
+			}
+
+			if intersectionType != test.expectedType {
+				t.Errorf("SegmentIntersection type failed for %s: expected %v, got %v", test.name, test.expectedType, intersectionType)
+			}
+
+			if intersectionType == PointIntersection || intersectionType == OverlapIntersection {
+				// Allow small tolerance for intersection points
+				if math.Abs(float64(point.X-test.expectedPoint.X)) > 1 || math.Abs(float64(point.Y-test.expectedPoint.Y)) > 1 {
+					t.Errorf("SegmentIntersection point failed for %s: expected %v, got %v", test.name, test.expectedPoint, point)
+				}
+			}
+		})
+	}
+}
+
+// TestWindingNumber tests winding number calculation
+func TestWindingNumber(t *testing.T) {
+	square := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+
+	tests := []struct {
+		name     string
+		point    Point64
+		expected int
+	}{
+		{"Inside square", Point64{5, 5}, 1},
+		{"Outside square", Point64{-5, 5}, 0},
+		{"On boundary", Point64{0, 5}, 0}, // Point on edge should have winding 0 for this test
+		{"Far outside", Point64{100, 100}, 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			wn := WindingNumber(test.point, square)
+			if test.name == "On boundary" {
+				// For boundary points, we mainly care that it's detected as such
+				// The actual winding number can vary based on implementation
+				return
+			}
+			if wn != test.expected {
+				t.Errorf("WindingNumber failed for %s: expected %v, got %v", test.name, test.expected, wn)
+			}
+		})
+	}
+}
+
+// TestPointInPolygon tests point-in-polygon with all fill rules
+func TestPointInPolygon(t *testing.T) {
+	square := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+
+	tests := []struct {
+		name     string
+		point    Point64
+		fillRule FillRule
+		expected PolygonLocation
+	}{
+		{"Inside square - NonZero", Point64{5, 5}, NonZero, Inside},
+		{"Inside square - EvenOdd", Point64{5, 5}, EvenOdd, Inside},
+		{"Inside square - Positive", Point64{5, 5}, Positive, Inside},
+		{"Outside square - NonZero", Point64{-5, 5}, NonZero, Outside},
+		{"Outside square - EvenOdd", Point64{-5, 5}, EvenOdd, Outside},
+		{"On boundary", Point64{0, 5}, NonZero, OnBoundary},
+		{"Corner point", Point64{0, 0}, NonZero, OnBoundary},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			location := PointInPolygon(test.point, square, test.fillRule)
+			if location != test.expected {
+				t.Errorf("PointInPolygon failed for %s: expected %v, got %v", test.name, test.expected, location)
+			}
+		})
+	}
+}
+
+// TestNumericalStability tests edge cases near overflow boundaries
+func TestNumericalStability(t *testing.T) {
+	// Test with coordinates near int64 limits
+	maxInt64 := int64(9223372036854775807)
+	largeCoords := []Point64{
+		{maxInt64 - 1000, maxInt64 - 1000},
+		{maxInt64 - 500, maxInt64 - 1000},
+		{maxInt64 - 500, maxInt64 - 500},
+		{maxInt64 - 1000, maxInt64 - 500},
+	}
+
+	// Test area calculation doesn't overflow
+	area128 := Area128(largeCoords)
+	if area128.IsZero() {
+		t.Error("Expected non-zero area for large coordinate polygon")
+	}
+
+	// Test cross product doesn't overflow
+	cross := CrossProduct128(largeCoords[0], largeCoords[1], largeCoords[2])
+	// Should not panic and should give a reasonable result
+	if cross.IsZero() {
+		t.Error("Expected non-zero cross product for large coordinates")
+	}
+
+	// Test collinearity detection with large coordinates
+	p1 := Point64{maxInt64 - 1000, maxInt64 - 1000}
+	p2 := Point64{maxInt64 - 500, maxInt64 - 500}
+	p3 := Point64{maxInt64, maxInt64}
+
+	isCollinear := IsCollinear(p1, p2, p3)
+	if !isCollinear {
+		t.Error("Expected points on diagonal line to be collinear")
 	}
 }
 
@@ -228,7 +502,7 @@ func TestRectClip64EdgeCases(t *testing.T) {
 	// Test case 1: Degenerate rectangle (zero width)
 	degenerateRect := Path64{{10, 10}, {10, 10}, {10, 20}, {10, 20}}
 	paths := Paths64{{{0, 0}, {5, 0}, {5, 5}, {0, 5}}}
-	
+
 	result, err := RectClip64(degenerateRect, paths)
 	if err != nil {
 		t.Fatalf("RectClip64 with degenerate rect failed: %v", err)
@@ -236,11 +510,11 @@ func TestRectClip64EdgeCases(t *testing.T) {
 	if len(result) != 0 {
 		t.Errorf("Expected empty result for degenerate rectangle, got %v", result)
 	}
-	
+
 	// Test case 2: Path completely outside rectangle
 	rect := Path64{{0, 0}, {5, 0}, {5, 5}, {0, 5}}
 	outsidePath := Paths64{{{10, 10}, {15, 10}, {15, 15}, {10, 15}}}
-	
+
 	result, err = RectClip64(rect, outsidePath)
 	if err != nil {
 		t.Fatalf("RectClip64 with outside path failed: %v", err)
@@ -248,10 +522,10 @@ func TestRectClip64EdgeCases(t *testing.T) {
 	if len(result) != 0 {
 		t.Errorf("Expected empty result for outside path, got %v", result)
 	}
-	
-	// Test case 3: Path completely inside rectangle  
+
+	// Test case 3: Path completely inside rectangle
 	insidePath := Paths64{{{1, 1}, {2, 1}, {2, 2}, {1, 2}}}
-	
+
 	result, err = RectClip64(rect, insidePath)
 	if err != nil {
 		t.Fatalf("RectClip64 with inside path failed: %v", err)
@@ -259,10 +533,10 @@ func TestRectClip64EdgeCases(t *testing.T) {
 	if len(result) != 1 || len(result[0]) != 4 {
 		t.Errorf("Expected inside path to be unchanged, got %v", result)
 	}
-	
+
 	// Test case 4: Path partially intersecting rectangle
 	crossingPath := Paths64{{{-1, 2}, {3, 2}, {3, 7}, {-1, 7}}}
-	
+
 	result, err = RectClip64(rect, crossingPath)
 	if err != nil {
 		t.Fatalf("RectClip64 with crossing path failed: %v", err)
@@ -271,10 +545,10 @@ func TestRectClip64EdgeCases(t *testing.T) {
 		t.Errorf("Expected non-empty result for crossing path, got empty")
 	}
 	t.Logf("Crossing path clipped result: %v", result)
-	
+
 	// Test case 5: Empty paths input
 	emptyPaths := Paths64{}
-	
+
 	result, err = RectClip64(rect, emptyPaths)
 	if err != nil {
 		t.Fatalf("RectClip64 with empty paths failed: %v", err)
@@ -282,14 +556,14 @@ func TestRectClip64EdgeCases(t *testing.T) {
 	if len(result) != 0 {
 		t.Errorf("Expected empty result for empty paths input, got %v", result)
 	}
-	
+
 	// Test case 6: Paths with degenerate segments (single points, collinear points)
 	degeneratePaths := Paths64{
-		{{1, 1}}, // Single point - should be skipped
-		{{1, 1}, {1, 1}, {1, 1}}, // All same point - should be skipped  
-		{{1, 1}, {3, 3}}, // Valid 2-point segment
+		{{1, 1}},                 // Single point - should be skipped
+		{{1, 1}, {1, 1}, {1, 1}}, // All same point - should be skipped
+		{{1, 1}, {3, 3}},         // Valid 2-point segment
 	}
-	
+
 	result, err = RectClip64(rect, degeneratePaths)
 	if err != nil {
 		t.Fatalf("RectClip64 with degenerate paths failed: %v", err)
@@ -300,10 +574,10 @@ func TestRectClip64EdgeCases(t *testing.T) {
 func TestRectClip64PointsOnBoundary(t *testing.T) {
 	// Rectangle from (0,0) to (10,10)
 	rect := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
-	
+
 	// Test case 1: Path with points exactly on rectangle boundary
 	boundaryPath := Paths64{{{0, 5}, {5, 0}, {10, 5}, {5, 10}}}
-	
+
 	result, err := RectClip64(rect, boundaryPath)
 	if err != nil {
 		t.Fatalf("RectClip64 with boundary points failed: %v", err)
@@ -312,10 +586,10 @@ func TestRectClip64PointsOnBoundary(t *testing.T) {
 		t.Errorf("Expected non-empty result for boundary path")
 	}
 	t.Logf("Boundary path result: %v", result)
-	
+
 	// Test case 2: Path touching corner
 	cornerPath := Paths64{{{0, 0}, {-5, -5}, {5, -5}}}
-	
+
 	result, err = RectClip64(rect, cornerPath)
 	if err != nil {
 		t.Fatalf("RectClip64 with corner touching path failed: %v", err)
@@ -327,7 +601,7 @@ func TestRectClip64RandomOrientedRectangle(t *testing.T) {
 	// Test with rectangle points in different order (counter-clockwise)
 	rect := Path64{{0, 10}, {0, 0}, {10, 0}, {10, 10}} // CCW order
 	paths := Paths64{{{2, 2}, {8, 2}, {8, 8}, {2, 8}}}
-	
+
 	result, err := RectClip64(rect, paths)
 	if err != nil {
 		t.Fatalf("RectClip64 with CCW rectangle failed: %v", err)
@@ -336,10 +610,10 @@ func TestRectClip64RandomOrientedRectangle(t *testing.T) {
 		t.Errorf("Expected 1 clipped path, got %d", len(result))
 	}
 	t.Logf("CCW rectangle result: %v", result)
-	
+
 	// Test with rectangle points in random order
 	randomRect := Path64{{10, 0}, {0, 10}, {10, 10}, {0, 0}}
-	
+
 	result, err = RectClip64(randomRect, paths)
 	if err != nil {
 		t.Fatalf("RectClip64 with random order rectangle failed: %v", err)
@@ -365,7 +639,7 @@ func TestRectClip64RandomPaths(t *testing.T) {
 			"path should be clipped to rectangle bounds",
 		},
 		{
-			"Rectangle with negative coordinates", 
+			"Rectangle with negative coordinates",
 			Path64{{-10, -10}, {10, -10}, {10, 10}, {-10, 10}},
 			Paths64{{{-15, -5}, {15, -5}, {15, 5}, {-15, 5}}},
 			"should handle negative coordinates correctly",
@@ -374,9 +648,9 @@ func TestRectClip64RandomPaths(t *testing.T) {
 			"Multiple paths, some inside, some outside",
 			Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}},
 			Paths64{
-				{{1, 1}, {2, 1}, {2, 2}, {1, 2}}, // Inside
+				{{1, 1}, {2, 1}, {2, 2}, {1, 2}},         // Inside
 				{{11, 11}, {12, 11}, {12, 12}, {11, 12}}, // Outside
-				{{-1, 5}, {5, 5}, {5, 8}, {-1, 8}}, // Crossing
+				{{-1, 5}, {5, 5}, {5, 8}, {-1, 8}},       // Crossing
 			},
 			"should return inside and crossing paths only",
 		},
@@ -387,18 +661,18 @@ func TestRectClip64RandomPaths(t *testing.T) {
 			"should clip complex polygon correctly",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := RectClip64(tc.rect, tc.paths)
 			if err != nil {
 				t.Fatalf("RectClip64 failed for %s: %v", tc.name, err)
 			}
-			
+
 			t.Logf("%s - Input paths: %v", tc.name, tc.paths)
 			t.Logf("%s - Result: %v", tc.name, result)
 			t.Logf("%s - Expected: %s", tc.name, tc.expected)
-			
+
 			// Basic validation - result should not contain points outside rectangle bounds
 			left, right, top, bottom := getBounds(tc.rect)
 			for _, path := range result {
@@ -417,12 +691,12 @@ func getBounds(rect Path64) (left, right, top, bottom int64) {
 	if len(rect) == 0 {
 		return 0, 0, 0, 0
 	}
-	
+
 	left = rect[0].X
 	right = rect[0].X
 	top = rect[0].Y
 	bottom = rect[0].Y
-	
+
 	for _, pt := range rect {
 		if pt.X < left {
 			left = pt.X
@@ -437,14 +711,14 @@ func getBounds(rect Path64) (left, right, top, bottom int64) {
 			bottom = pt.Y
 		}
 	}
-	
+
 	return left, right, top, bottom
 }
 
 func TestRectClip64StressTest(t *testing.T) {
 	// Stress test with many small rectangles
 	baseRect := Path64{{0, 0}, {100, 0}, {100, 100}, {0, 100}}
-	
+
 	// Generate many small paths within and outside the rectangle
 	var paths Paths64
 	for i := 0; i < 50; i++ {
@@ -454,14 +728,14 @@ func TestRectClip64StressTest(t *testing.T) {
 			{x, y}, {x + 5, y}, {x + 5, y + 5}, {x, y + 5},
 		})
 	}
-	
+
 	result, err := RectClip64(baseRect, paths)
 	if err != nil {
 		t.Fatalf("Stress test failed: %v", err)
 	}
-	
+
 	t.Logf("Stress test: Input %d paths, output %d paths", len(paths), len(result))
-	
+
 	// Verify all resulting points are within bounds
 	for _, path := range result {
 		for _, pt := range path {

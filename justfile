@@ -41,12 +41,13 @@ test-run-oracle name:
 vet:
     go vet ./...
 
-# Format all Go code
+# Format all code using treefmt
 fmt:
-    go fmt ./...
+    treefmt
 
 # Run linting checks
-lint: vet fmt
+lint:
+    golangci-lint run --config .golangci.toml
 
 # Clean go module cache and build artifacts
 clean:

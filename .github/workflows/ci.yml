@@ -1,9 +1,9 @@
 name: CI
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   pure-go:
@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-      
+          go-version: "1.22"
+
       - name: Test pure Go implementation
         run: go test ./port -v
-        
+
       - name: Build examples
         run: |
           go build ./...
@@ -31,14 +31,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-          
+
       - name: Install Clipper2
         run: brew install clipper2
-        
+
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          
+          go-version: "1.22"
+
       - name: Test with CGO oracle
         run: go test ./... -tags=clipper_cgo -v
 
@@ -49,12 +49,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-          
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config
-          
+
       - name: Build Clipper2 from source
         run: |
           cd third_party/clipper2
@@ -63,7 +63,7 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          
+
       - name: Create pkg-config file
         run: |
           sudo mkdir -p /usr/local/lib/pkgconfig
@@ -72,7 +72,7 @@ jobs:
           exec_prefix=\${prefix}
           libdir=\${exec_prefix}/lib
           includedir=\${prefix}/include
-          
+
           Name: Clipper2
           Description: Polygon clipping and offsetting library
           Version: 1.5.4
@@ -80,11 +80,11 @@ jobs:
           Cflags: -I\${includedir}
           EOF
           sudo cp clipper2.pc /usr/local/lib/pkgconfig/
-          
+
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          
+          go-version: "1.22"
+
       - name: Test with CGO oracle
         run: |
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH

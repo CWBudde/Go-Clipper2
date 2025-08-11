@@ -1,24 +1,33 @@
 # Go Clipper2
 
-A high-performance pure Go port of [Clipper2](https://github.com/AngusJohnson/Clipper2), the industry-standard polygon clipping and offsetting library. Go Clipper2 provides robust geometric operations with 64-bit integer precision, eliminating floating-point numerical errors common in computational geometry.
+A high-performance pure Go port of
+[Clipper2](https://github.com/AngusJohnson/Clipper2), the industry-standard
+polygon clipping and offsetting library. Go Clipper2 provides robust geometric
+operations with 64-bit integer precision, eliminating floating-point numerical
+errors common in computational geometry.
 
 ## 🌟 Features
 
 - **🚀 Pure Go Implementation**: Zero C/C++ dependencies for production use
 - **🔧 Dual Architecture**: CGO oracle for development validation and testing
-- **⚡ Robust Arithmetic**: 64-bit integer coordinates prevent numerical instability
-- **🎯 Complete API**: All Clipper2 operations including boolean ops, offsetting, and clipping
-- **🧪 Comprehensive Testing**: Property-based testing with fuzzing and golden reference validation
+- **⚡ Robust Arithmetic**: 64-bit integer coordinates prevent numerical
+  instability
+- **🎯 Complete API**: All Clipper2 operations including boolean ops,
+  offsetting, and clipping
+- **🧪 Comprehensive Testing**: Property-based testing with fuzzing and golden
+  reference validation
 - **📦 Easy Integration**: Simple Go module with clean, idiomatic API
 
 ## 🛠️ Development Setup
 
 ### Prerequisites
+
 - Go 1.22 or later
 - Git with submodule support
 - C++ compiler (for CGO oracle testing only)
 
 ### Quick Start
+
 ```bash
 # Clone with submodules
 git clone --recurse-submodules https://github.com/go-clipper/clipper2
@@ -34,21 +43,25 @@ go vet ./...
 
 ### CGO Oracle Setup (Development & Testing)
 
-The CGO oracle validates pure Go implementations against the original C++ library.
+The CGO oracle validates pure Go implementations against the original C++
+library.
 
 #### macOS
+
 ```bash
 brew install clipper2
 go test ./... -tags=clipper_cgo -v
 ```
 
 #### Linux (Fedora/CentOS)
+
 ```bash
 sudo dnf install clipper2-devel
 go test ./... -tags=clipper_cgo -v
 ```
 
 #### Linux (Ubuntu/Debian)
+
 ```bash
 # Option 1: Build from source
 cd third_party/clipper2
@@ -66,6 +79,7 @@ go test ./... -tags=clipper_cgo -v
 ```
 
 #### Windows
+
 ```bash
 # Using MSYS2/MinGW
 pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
@@ -97,28 +111,28 @@ func main() {
     clip := clipper.Paths64{
         {{50, 50}, {150, 50}, {150, 150}, {50, 150}},
     }
-    
+
     // Union: combine both shapes
     union, err := clipper.Union64(subject, clip, clipper.NonZero)
     if err != nil {
         panic(err)
     }
     fmt.Printf("Union area: %.0f\n", clipper.Area64(union[0]))
-    
+
     // Intersection: overlapping area only
     intersection, err := clipper.Intersect64(subject, clip, clipper.NonZero)
     if err != nil {
         panic(err)
     }
     fmt.Printf("Intersection area: %.0f\n", clipper.Area64(intersection[0]))
-    
+
     // Difference: subject minus clip
     difference, err := clipper.Difference64(subject, clip, clipper.NonZero)
     if err != nil {
         panic(err)
     }
     fmt.Printf("Difference paths: %d\n", len(difference))
-    
+
     // XOR: symmetric difference
     xor, err := clipper.Xor64(subject, clip, clipper.NonZero)
     if err != nil {
@@ -214,7 +228,7 @@ type Paths64 []Path64    // Collection of paths (polygons with holes)
 ```go
 // Primary operations (simplified interface)
 func Union64(subjects, clips Paths64, fillRule FillRule) (Paths64, error)
-func Intersect64(subjects, clips Paths64, fillRule FillRule) (Paths64, error) 
+func Intersect64(subjects, clips Paths64, fillRule FillRule) (Paths64, error)
 func Difference64(subjects, clips Paths64, fillRule FillRule) (Paths64, error)
 func Xor64(subjects, clips Paths64, fillRule FillRule) (Paths64, error)
 
@@ -239,7 +253,7 @@ func InflatePaths64(paths Paths64, delta float64, joinType JoinType, endType End
 // Join types for connecting segments
 const (
     Square JoinType = iota  // Sharp corners
-    Round                   // Rounded corners  
+    Round                   // Rounded corners
     Miter                   // Mitered corners (with limit)
 )
 
@@ -264,19 +278,19 @@ func RectClip64(rect Path64, paths Paths64) (Paths64, error)  // Fast rectangula
 
 ## 📊 Implementation Status
 
-| Feature | Pure Go | CGO Oracle | Status |
-|---------|---------|------------|--------|
-| Boolean Operations | ❌ | ✅ | In Development |
-| Union64 | ❌ | ✅ | Planned |
-| Intersect64 | ❌ | ✅ | Planned |
-| Difference64 | ❌ | ✅ | Planned |
-| Xor64 | ❌ | ✅ | Planned |
-| Polygon Offsetting | ❌ | ❌ | Planned |
-| Rectangle Clipping | ❌ | ❌ | Planned |
-| Area Calculation | ✅ | ✅ | Complete |
-| Orientation Detection | ✅ | ✅ | Complete |
-| Path Reversal | ✅ | ✅ | Complete |
-| Minkowski Operations | ❌ | ❌ | Future |
+| Feature               | Pure Go | CGO Oracle | Status         |
+| --------------------- | ------- | ---------- | -------------- |
+| Boolean Operations    | ❌      | ✅         | In Development |
+| Union64               | ❌      | ✅         | Planned        |
+| Intersect64           | ❌      | ✅         | Planned        |
+| Difference64          | ❌      | ✅         | Planned        |
+| Xor64                 | ❌      | ✅         | Planned        |
+| Polygon Offsetting    | ❌      | ❌         | Planned        |
+| Rectangle Clipping    | ❌      | ❌         | Planned        |
+| Area Calculation      | ✅      | ✅         | Complete       |
+| Orientation Detection | ✅      | ✅         | Complete       |
+| Path Reversal         | ✅      | ✅         | Complete       |
+| Minkowski Operations  | ❌      | ❌         | Future         |
 
 **Legend**: ✅ Implemented, ❌ Not implemented, 🚧 In progress
 
@@ -313,14 +327,14 @@ go test -bench=. ./port
 The project uses Go build tags for dual implementation:
 
 - `port/impl_pure.go` (no build tag): Pure Go implementations
-- `port/impl_oracle_cgo.go` (`//go:build clipper_cgo`): Delegates to CGO oracle  
+- `port/impl_oracle_cgo.go` (`//go:build clipper_cgo`): Delegates to CGO oracle
 - `capi/` (all files have `//go:build clipper_cgo`): CGO bindings
 
 ### Adding New Operations
 
 1. Add function signature to `port/clipper.go`
 2. Add stub returning `ErrNotImplemented` to `port/impl_pure.go`
-3. Add CGO delegation to `port/impl_oracle_cgo.go` 
+3. Add CGO delegation to `port/impl_oracle_cgo.go`
 4. Add CGO binding to `capi/clipper_cgo.go` if needed
 5. Add comprehensive tests to `port/clipper_test.go`
 
@@ -329,13 +343,15 @@ The project uses Go build tags for dual implementation:
 ### CGO Oracle Build Issues
 
 **"clipper2/clipper.export.h: No such file"**
+
 ```bash
 # Ensure Clipper2 is installed with headers
 brew install clipper2  # macOS
 dnf install clipper2-devel  # Fedora
 ```
 
-**"undefined reference to BooleanOp64"**  
+**"undefined reference to BooleanOp64"**
+
 ```bash
 # Check library installation
 pkg-config --cflags --libs Clipper2
@@ -346,6 +362,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ```
 
 **Windows CGO Issues**
+
 ```bash
 # Use MSYS2 environment
 set CGO_ENABLED=1
@@ -356,16 +373,20 @@ set CC=gcc
 
 ### Common Errors
 
-**`ErrNotImplemented`**: Feature not yet ported to pure Go. Use CGO oracle for testing or wait for implementation.
+**`ErrNotImplemented`**: Feature not yet ported to pure Go. Use CGO oracle for
+testing or wait for implementation.
 
-**`ErrInvalidInput`**: Check polygon orientation, ensure paths are not self-intersecting for basic operations.
+**`ErrInvalidInput`**: Check polygon orientation, ensure paths are not
+self-intersecting for basic operations.
 
-**Memory Issues**: When using CGO oracle, ensure proper cleanup. The library handles this automatically.
+**Memory Issues**: When using CGO oracle, ensure proper cleanup. The library
+handles this automatically.
 
 ### Performance Tips
 
 - Use integer coordinates when possible (more robust than float64)
-- For simple rectangular clipping, use `RectClip64` instead of boolean operations
+- For simple rectangular clipping, use `RectClip64` instead of boolean
+  operations
 - Pre-simplify complex polygons before operations
 - Consider polygon orientation for optimal performance
 
@@ -377,8 +398,12 @@ set CC=gcc
 
 ## 📄 License
 
-This project is licensed under the **Boost Software License 1.0**, the same as the original Clipper2 library. See [LICENSE](LICENSE) for details.
+This project is licensed under the **Boost Software License 1.0**, the same as
+the original Clipper2 library. See [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-This project is a port of the excellent [Clipper2](https://github.com/AngusJohnson/Clipper2) library by Angus Johnson. Special thanks to the Clipper2 community for creating such a robust and well-designed computational geometry library.
+This project is a port of the excellent
+[Clipper2](https://github.com/AngusJohnson/Clipper2) library by Angus Johnson.
+Special thanks to the Clipper2 community for creating such a robust and
+well-designed computational geometry library.
