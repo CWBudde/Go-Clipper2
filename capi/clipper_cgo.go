@@ -9,6 +9,16 @@ package capi
 #include <stdint.h>
 #include <stdlib.h>
 #include "clipper2/clipper.export.h"
+
+// helper wrapper for RectClip64 to avoid dealing with CRect64 from Go
+CPaths64 RectClip64Wrapper(int64_t left, int64_t top, int64_t right, int64_t bottom, const CPaths64 paths) {
+    CRect64 r;
+    r.left = left;
+    r.top = top;
+    r.right = right;
+    r.bottom = bottom;
+    return RectClip64(r, paths);
+}
 */
 import "C"
 import (
@@ -137,4 +147,56 @@ func BooleanOp64(clipType, fillRule uint8, subjects, subjectsOpen, clips Paths64
 	}
 
 	return solution, solutionOpen, nil
+}
+
+// InflatePaths64 offsets the given paths by delta using the native library.
+func InflatePaths64(paths Paths64, delta float64, joinType, endType uint8, miterLimit, arcTolerance float64) (Paths64, error) {
+	in, _, freeIn := packPaths64(paths)
+	defer freeIn()
+
+	out := C.InflatePaths64(
+		in,
+		C.double(delta),
+		C.uchar(joinType),
+		C.uchar(endType),
+		C.double(miterLimit),
+		C.double(arcTolerance),
+	)
+
+	result := unpackPaths64(out)
+	if out != nil {
+		C.DisposeArray64(out)
+	}
+	return result, nil
+}
+
+// RectClip64 clips paths against a rectangular region defined by rect.
+func RectClip64(rect Path64, paths Paths64) (Paths64, error) {
+	if len(rect) < 4 {
+		return nil, errors.New("rectangle must have at least 4 points")
+	}
+	left, right := rect[0].X, rect[0].X
+	top, bottom := rect[0].Y, rect[0].Y
+	for _, pt := range rect[1:] {
+		if pt.X < left {
+			left = pt.X
+		}
+		if pt.X > right {
+			right = pt.X
+		}
+		if pt.Y < top {
+			top = pt.Y
+		}
+		if pt.Y > bottom {
+			bottom = pt.Y
+		}
+	}
+	in, _, freeIn := packPaths64(paths)
+	defer freeIn()
+	out := C.RectClip64Wrapper(C.int64_t(left), C.int64_t(top), C.int64_t(right), C.int64_t(bottom), in)
+	result := unpackPaths64(out)
+	if out != nil {
+		C.DisposeArray64(out)
+	}
+	return result, nil
 }

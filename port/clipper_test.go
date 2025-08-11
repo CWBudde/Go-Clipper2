@@ -85,7 +85,7 @@ func TestArea64(t *testing.T) {
 	square := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
 	area := Area64(square)
 	expected := 100.0
-	
+
 	if area != expected {
 		t.Errorf("Expected area %v, got %v", expected, area)
 	}
@@ -108,13 +108,13 @@ func TestIsPositive64(t *testing.T) {
 func TestReverse64(t *testing.T) {
 	original := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
 	expected := Path64{{0, 10}, {10, 10}, {10, 0}, {0, 0}}
-	
+
 	result := Reverse64(original)
-	
+
 	if len(result) != len(expected) {
 		t.Fatalf("Length mismatch: expected %d, got %d", len(expected), len(result))
 	}
-	
+
 	for i, pt := range result {
 		if pt != expected[i] {
 			t.Errorf("Point %d: expected %v, got %v", i, expected[i], pt)
@@ -124,7 +124,7 @@ func TestReverse64(t *testing.T) {
 
 func TestInflatePaths64(t *testing.T) {
 	square := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
-	
+
 	result, err := InflatePaths64(square, 1.0, Round, ClosedPolygon)
 	if err == ErrNotImplemented {
 		t.Skip("InflatePaths64 not yet implemented")
@@ -132,9 +132,25 @@ func TestInflatePaths64(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InflatePaths64 failed: %v", err)
 	}
-	
+
 	if len(result) == 0 {
 		t.Fatal("Expected non-empty result from inflate")
 	}
 	t.Logf("Inflate result: %v", result)
+}
+
+func TestRectClip64(t *testing.T) {
+	rect := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+	paths := Paths64{{{-5, -5}, {5, -5}, {5, 5}, {-5, 5}}}
+	result, err := RectClip64(rect, paths)
+	if err == ErrNotImplemented {
+		t.Skip("RectClip64 not yet implemented")
+	}
+	if err != nil {
+		t.Fatalf("RectClip64 failed: %v", err)
+	}
+	if len(result) == 0 {
+		t.Fatal("Expected non-empty result from rect clip")
+	}
+	t.Logf("RectClip result: %v", result)
 }
