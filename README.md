@@ -21,8 +21,8 @@ A high-performance pure Go port of [Clipper2](https://github.com/AngusJohnson/Cl
 ### Quick Start
 ```bash
 # Clone with submodules
-git clone --recurse-submodules https://github.com/you/clipper2-go
-cd clipper2-go
+git clone --recurse-submodules https://github.com/go-clipper/clipper2
+cd clipper2
 
 # Test pure Go implementation (most operations will skip until implemented)
 go test ./port -v
@@ -86,7 +86,7 @@ package main
 
 import (
     "fmt"
-    "github.com/you/clipper2-go/port"
+    "github.com/go-clipper/clipper2/port"
 )
 
 func main() {

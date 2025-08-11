@@ -3,7 +3,7 @@
 package clipper
 
 import (
-	"github.com/you/clipper2-go/capi"
+	"github.com/go-clipper/clipper2/capi"
 )
 
 // convertToCAPI converts port types to capi types
