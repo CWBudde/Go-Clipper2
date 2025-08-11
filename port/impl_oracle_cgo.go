@@ -54,14 +54,28 @@ func booleanOp64Impl(clipType ClipType, fillRule FillRule, subjects, subjectsOpe
 	return solution, solutionOpen, nil
 }
 
-// inflatePathsImpl is not yet implemented via CGO
+// inflatePathsImpl delegates to the CGO oracle implementation
 func inflatePathsImpl(paths Paths64, delta float64, joinType JoinType, endType EndType, opts OffsetOptions) (Paths64, error) {
-	return nil, ErrNotImplemented
+	capiPaths := pathsToCAPI(paths)
+	capiResult, err := capi.InflatePaths64(capiPaths, delta, uint8(joinType), uint8(endType), opts.MiterLimit, opts.ArcTolerance)
+	if err != nil {
+		return nil, err
+	}
+	return pathsFromCAPI(capiResult), nil
 }
 
-// rectClipImpl is not yet implemented via CGO
+// rectClipImpl delegates to the CGO oracle implementation
 func rectClipImpl(rect Path64, paths Paths64) (Paths64, error) {
-	return nil, ErrNotImplemented
+	capiRect := make(capi.Path64, len(rect))
+	for i, pt := range rect {
+		capiRect[i] = capi.Point64{X: pt.X, Y: pt.Y}
+	}
+	capiPaths := pathsToCAPI(paths)
+	capiResult, err := capi.RectClip64(capiRect, capiPaths)
+	if err != nil {
+		return nil, err
+	}
+	return pathsFromCAPI(capiResult), nil
 }
 
 // areaImpl calculates area using basic polygon area formula
@@ -69,7 +83,7 @@ func areaImpl(path Path64) float64 {
 	if len(path) < 3 {
 		return 0.0
 	}
-	
+
 	area := 0.0
 	for i := 0; i < len(path); i++ {
 		j := (i + 1) % len(path)
