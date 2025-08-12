@@ -124,7 +124,7 @@ func TestBooleanOp64OpenPaths(t *testing.T) {
 	}
 	// The open path crossing the polygon may be split into multiple segments
 	t.Logf("Got %d open path(s): %v", len(solOpen), solOpen)
-	
+
 	// Verify all open paths have at least 2 points
 	for i, path := range solOpen {
 		if len(path) < 2 {
@@ -179,7 +179,7 @@ func TestBooleanOp64IntersectionCoords(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 path, got %d", len(got))
 	}
-	
+
 	// Check that all expected vertices are present (regardless of order/starting point)
 	expect := map[Point64]bool{
 		{5, 5}: true, {10, 5}: true, {10, 10}: true, {5, 10}: true,
@@ -192,7 +192,7 @@ func TestBooleanOp64IntersectionCoords(t *testing.T) {
 			t.Fatalf("unexpected vertex %d: got %v", i, vertex)
 		}
 	}
-	
+
 	// Verify it's the correct intersection area (should be 25 square units)
 	expectedArea := int64(25)
 	actualArea := abs(area(got[0]))
