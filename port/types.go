@@ -5,9 +5,9 @@ package clipper
 // This file contains the core type definitions for the Clipper2 polygon operations
 // Includes basic types, enums, and complex algorithm-specific types
 
-//==============================================================================
+// ==============================================================================
 // Core Types and Enums
-//==============================================================================
+// ==============================================================================
 
 // Point64 represents a point with 64-bit integer coordinates
 type Point64 struct {
@@ -66,9 +66,9 @@ type OffsetOptions struct {
 	ArcTolerance float64 // maximum allowed deviation from true arc (default: 0.25)
 }
 
-//==============================================================================
+// ==============================================================================
 // Vatti Algorithm Types
-//==============================================================================
+// ==============================================================================
 
 // PathType represents the type of a path (subject or clip)
 type PathType uint8
@@ -140,10 +140,10 @@ type PolyPath struct {
 
 // Clipper64 implements the Vatti polygon clipping algorithm
 type Clipper64 struct {
-	minimaList     *LocalMinima // sorted list of local minima
-	activeEdgeList *Edge        // active edge list during scanline
-	scanY          int64        // current scanline Y position
-	outRecList     []*OutRec    // list of output records
-	fillRule       FillRule     // fill rule for polygon interiors
-	clipType       ClipType     // boolean operation type
+	_minimaList     *LocalMinima // sorted list of local minima
+	_activeEdgeList *Edge        // active edge list during scanline
+	_scanY          int64        // current scanline Y position
+	_outRecList     []*OutRec    // list of output records
+	_fillRule       FillRule     // fill rule for polygon interiors
+	_clipType       ClipType     // boolean operation type
 }

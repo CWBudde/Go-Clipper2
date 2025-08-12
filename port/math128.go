@@ -91,12 +91,8 @@ func (i Int128) ToFloat64() float64 {
 	// For values that fit in int64 range, use direct conversion to avoid precision loss
 	if (i.Hi == 0) || (i.Hi == -1 && i.Lo >= 1<<63) {
 		// Value fits in int64 range
-		if i.Hi == 0 {
-			return float64(int64(i.Lo))
-		} else {
-			// i.Hi == -1, convert Lo as signed int64
-			return float64(int64(i.Lo))
-		}
+		// Both cases can use the same conversion since they fit in int64 range
+		return float64(int64(i.Lo))
 	}
 
 	// For larger values, use the general formula

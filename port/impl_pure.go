@@ -8,7 +8,7 @@ package clipper
 // booleanOp64Impl pure Go implementation - simplified approach for basic cases
 // This implements a basic working version that handles simple rectangles correctly
 // Following the M3 guidance: "Start with simple cases then generalize"
-func booleanOp64Impl(clipType ClipType, fillRule FillRule, subjects, subjectsOpen, clips Paths64) (solution Paths64, solutionOpen Paths64, err error) {
+func booleanOp64Impl(clipType ClipType, _fillRule FillRule, subjects, _subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
 	// Handle empty inputs
 	if len(subjects) == 0 {
 		if clipType == Union || clipType == Xor {
@@ -39,7 +39,7 @@ func booleanOp64Impl(clipType ClipType, fillRule FillRule, subjects, subjectsOpe
 }
 
 // inflatePathsImpl pure Go implementation (not yet implemented)
-func inflatePathsImpl(paths Paths64, delta float64, joinType JoinType, endType EndType, opts OffsetOptions) (Paths64, error) {
+func inflatePathsImpl(_paths Paths64, _delta float64, _joinType JoinType, _endType EndType, _opts OffsetOptions) (Paths64, error) {
 	return nil, ErrNotImplemented
 }
 
@@ -54,9 +54,9 @@ func areaImpl(path Path64) float64 {
 	return area128.ToFloat64() / 2.0
 }
 
-//==============================================================================
+// ==============================================================================
 // Simplified Boolean Operations for Basic Cases
-//==============================================================================
+// ==============================================================================
 
 // simpleUnion implements basic union for rectangular cases
 func simpleUnion(subjects, clips Paths64) Paths64 {
@@ -101,7 +101,7 @@ func simpleIntersection(subjects, clips Paths64) Paths64 {
 }
 
 // simpleDifference implements basic difference for rectangular cases
-func simpleDifference(subjects, clips Paths64) Paths64 {
+func simpleDifference(subjects, _clips Paths64) Paths64 {
 	// Simplified - return subjects (placeholder)
 	// Full implementation would subtract clip areas from subjects
 	var result Paths64
