@@ -28,8 +28,20 @@ text = "viper.Bind"
 path = "cmd/.*\\.go"
 linters = ["gochecknoinits", "gochecknoglobals"]
 
+[[linters.exclusions.rules]]
+# allow unused fields/variables prefixed with underscore (work-in-progress)
+linters = ["unused"]
+text = "(field|var) _\\w+ is unused"
+
 [linters.settings]
 
 [linters.settings.gocritic]
 enabled-tags = ["diagnostic", "style", "performance"]
 disabled-checks = ["commentedOutCode", "unnamedResult", "importShadow", "dupImport", "dupSubExpr"]
+
+[linters.settings.unused]
+# Allow unused fields/variables that start with underscore (work-in-progress fields)
+field-writes-are-uses = false
+exported-fields-are-used = false
+parameters-are-used = false
+local-variables-are-used = false

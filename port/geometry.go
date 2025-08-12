@@ -152,7 +152,7 @@ func WindingNumber(point Point64, polygon Path64) int {
 
 // calculateIntersectionPoint calculates the exact intersection point of two segments
 // using the cross product values already computed
-func calculateIntersectionPoint(seg1a, seg1b, seg2a, seg2b Point64, d1, d2 Int128) (Point64, error) {
+func calculateIntersectionPoint(seg1a, seg1b, _seg2a, _seg2b Point64, d1, d2 Int128) (Point64, error) {
 	// Calculate the intersection using parametric form
 	// P = seg1a + t * (seg1b - seg1a) where t = d1 / (d1 - d2)
 
@@ -239,7 +239,7 @@ func isPointOnSegment(point, segA, segB Point64) bool {
 
 // isLeft tests if point is left of the line from p1 to p2
 func isLeft(p1, p2, point Point64) bool {
-	return CrossProduct128(p1, p2, point).IsNegative() == false // left is positive in our coordinate system
+	return !CrossProduct128(p1, p2, point).IsNegative() // left is positive in our coordinate system
 }
 
 // Helper functions for int64 operations

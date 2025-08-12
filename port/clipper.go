@@ -27,7 +27,7 @@ func Xor64(subjects, clips Paths64, fillRule FillRule) (Paths64, error) {
 }
 
 // BooleanOp64 performs the specified boolean operation on the input polygons
-func BooleanOp64(clipType ClipType, fillRule FillRule, subjects, subjectsOpen, clips Paths64) (solution Paths64, solutionOpen Paths64, err error) {
+func BooleanOp64(clipType ClipType, fillRule FillRule, subjects, subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
 	return booleanOp64Impl(clipType, fillRule, subjects, subjectsOpen, clips)
 }
 

@@ -92,7 +92,7 @@ func FuzzRectClip64(f *testing.F) {
 
 		// Add to fuzz corpus
 		rectBytes := (*[32]byte)(unsafe.Pointer(&tc.rect))[:]
-		f.Add(rectBytes[:], flatPaths)
+		f.Add(rectBytes, flatPaths)
 	}
 
 	var totalTests int

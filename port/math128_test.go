@@ -522,7 +522,7 @@ func BenchmarkInt128_Mul64(b *testing.B) {
 
 func BenchmarkCrossProduct128(b *testing.B) {
 	p1 := Point64{X: 123, Y: 456}
-	p2 := Point64{X: 789, Y: 012}
+	p2 := Point64{X: 789, Y: 0o12}
 	p3 := Point64{X: 345, Y: 678}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

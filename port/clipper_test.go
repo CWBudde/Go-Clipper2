@@ -261,13 +261,14 @@ func TestCrossProduct128(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cross := CrossProduct128(test.p1, test.p2, test.p3)
 
-			if test.expected > 0 && !cross.IsNegative() && !cross.IsZero() {
+			switch {
+			case test.expected > 0 && !cross.IsNegative() && !cross.IsZero():
 				// Expected positive, got positive - OK
-			} else if test.expected < 0 && cross.IsNegative() {
+			case test.expected < 0 && cross.IsNegative():
 				// Expected negative, got negative - OK
-			} else if test.expected == 0 && cross.IsZero() {
+			case test.expected == 0 && cross.IsZero():
 				// Expected zero, got zero - OK
-			} else {
+			default:
 				t.Errorf("CrossProduct128 failed for %s: expected sign %v, got %v", test.name, test.expected, cross)
 			}
 		})
