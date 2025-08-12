@@ -49,6 +49,11 @@ fmt:
 lint:
     golangci-lint run --config .golangci.toml
 
+# Fix linting issues automatically
+lint-fix:
+    golangci-lint run --config .golangci.toml --fix
+    treefmt
+
 # Clean go module cache and build artifacts
 clean:
     go clean -cache -modcache -testcache

@@ -383,6 +383,61 @@ func TestSegmentIntersection(t *testing.T) {
 	}
 }
 
+// TestHandleCollinearSegments tests all branches of the collinear segment handler
+func TestHandleCollinearSegments(t *testing.T) {
+	tests := []struct {
+		name                       string
+		seg1a, seg1b, seg2a, seg2b Point64
+		expectedType               IntersectionType
+		expectedPoint              Point64
+	}{
+		// X-axis projection tests (dx >= dy)
+		{"X-axis: No overlap - segments apart", Point64{0, 0}, Point64{5, 0}, Point64{10, 0}, Point64{15, 0}, NoIntersection, Point64{}},
+		{"X-axis: No overlap - reversed", Point64{10, 0}, Point64{15, 0}, Point64{0, 0}, Point64{5, 0}, NoIntersection, Point64{}},
+		{"X-axis: Single point overlap", Point64{0, 0}, Point64{5, 0}, Point64{5, 0}, Point64{10, 0}, PointIntersection, Point64{5, 0}},
+		{"X-axis: Line segment overlap", Point64{0, 0}, Point64{10, 0}, Point64{5, 0}, Point64{15, 0}, OverlapIntersection, Point64{5, 0}},
+		{"X-axis: Diagonal dx>dy", Point64{0, 0}, Point64{10, 2}, Point64{5, 1}, Point64{15, 3}, OverlapIntersection, Point64{5, 1}},
+
+		// Y-axis projection tests (dy > dx)
+		{"Y-axis: No overlap - segments apart", Point64{0, 0}, Point64{0, 5}, Point64{0, 10}, Point64{0, 15}, NoIntersection, Point64{}},
+		{"Y-axis: No overlap - reversed", Point64{0, 10}, Point64{0, 15}, Point64{0, 0}, Point64{0, 5}, NoIntersection, Point64{}},
+		{"Y-axis: Single point overlap", Point64{0, 0}, Point64{0, 5}, Point64{0, 5}, Point64{0, 10}, PointIntersection, Point64{0, 5}},
+		{"Y-axis: Line segment overlap", Point64{0, 0}, Point64{0, 10}, Point64{0, 5}, Point64{0, 15}, OverlapIntersection, Point64{0, 5}},
+		{"Y-axis: Diagonal dy>dx", Point64{0, 0}, Point64{2, 10}, Point64{1, 5}, Point64{3, 15}, OverlapIntersection, Point64{1, 5}},
+
+		// Edge case: equal ranges (dx == dy), should prefer X-axis
+		{"Equal ranges: prefer X-axis", Point64{0, 0}, Point64{5, 5}, Point64{2, 2}, Point64{7, 7}, OverlapIntersection, Point64{2, 2}},
+
+		// Edge cases with negative coordinates
+		{"Y-axis: Negative coordinates", Point64{0, -10}, Point64{0, -5}, Point64{0, -7}, Point64{0, -2}, OverlapIntersection, Point64{0, -7}},
+		{"X-axis: Mixed coordinates", Point64{-5, 3}, Point64{5, 7}, Point64{0, 5}, Point64{10, 9}, OverlapIntersection, Point64{0, 5}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// First verify segments are actually collinear
+			if !IsCollinear(test.seg1a, test.seg1b, test.seg2a) || !IsCollinear(test.seg1a, test.seg1b, test.seg2b) {
+				t.Skipf("Test segments are not collinear, skipping")
+			}
+
+			point, intersectionType, err := SegmentIntersection(test.seg1a, test.seg1b, test.seg2a, test.seg2b)
+			if err != nil {
+				t.Fatalf("SegmentIntersection failed with error: %v", err)
+			}
+
+			if intersectionType != test.expectedType {
+				t.Errorf("Intersection type failed: expected %v, got %v", test.expectedType, intersectionType)
+			}
+
+			if intersectionType == PointIntersection || intersectionType == OverlapIntersection {
+				if point.X != test.expectedPoint.X || point.Y != test.expectedPoint.Y {
+					t.Errorf("Intersection point failed: expected %v, got %v", test.expectedPoint, point)
+				}
+			}
+		})
+	}
+}
+
 // TestWindingNumber tests winding number calculation
 func TestWindingNumber(t *testing.T) {
 	square := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
@@ -744,4 +799,59 @@ func TestRectClip64StressTest(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestUtilityFunctions tests the helper functions abs64 and minMax64
+func TestUtilityFunctions(t *testing.T) {
+	t.Run("abs64", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    int64
+			expected int64
+		}{
+			{"Positive number", 5, 5},
+			{"Negative number", -5, 5},
+			{"Zero", 0, 0},
+			{"Large positive", 1000000000, 1000000000},
+			{"Large negative", -1000000000, 1000000000},
+			{"MaxInt64", 9223372036854775807, 9223372036854775807},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				result := abs64(test.input)
+				if result != test.expected {
+					t.Errorf("abs64(%d) = %d, expected %d", test.input, result, test.expected)
+				}
+			})
+		}
+	})
+
+	t.Run("minMax64", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			a, b        int64
+			expectedMin int64
+			expectedMax int64
+		}{
+			{"a < b", 3, 7, 3, 7},
+			{"a > b", 7, 3, 3, 7},
+			{"a == b", 5, 5, 5, 5},
+			{"Negative numbers", -10, -3, -10, -3},
+			{"Mixed signs", -5, 10, -5, 10},
+			{"Zero and positive", 0, 8, 0, 8},
+			{"Zero and negative", -8, 0, -8, 0},
+			{"Large numbers", 1000000000, 2000000000, 1000000000, 2000000000},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				min, max := minMax64(test.a, test.b)
+				if min != test.expectedMin || max != test.expectedMax {
+					t.Errorf("minMax64(%d, %d) = (%d, %d), expected (%d, %d)",
+						test.a, test.b, min, max, test.expectedMin, test.expectedMax)
+				}
+			})
+		}
+	})
 }

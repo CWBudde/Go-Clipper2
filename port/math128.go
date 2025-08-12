@@ -98,7 +98,7 @@ func (i Int128) ToFloat64() float64 {
 			return float64(int64(i.Lo))
 		}
 	}
-	
+
 	// For larger values, use the general formula
 	const two64 = 18446744073709551616.0 // 2^64 as float64
 	return float64(i.Hi)*two64 + float64(i.Lo)
@@ -212,20 +212,20 @@ func DistanceSquared128(p1, p2 Point64) UInt128 {
 	// Square each difference: dx² and dy²
 	// Since we're squaring, the result is always positive
 	var dx_sq, dy_sq Int128
-	
+
 	// For dx²: if dx is negative, square gives positive result
 	if dx.IsNegative() {
 		dx = dx.Negate()
 	}
 	// Now dx is non-negative, so we can treat Lo as the value (Hi should be 0)
 	dx_sq = NewInt128(int64(dx.Lo)).Mul64(int64(dx.Lo))
-	
+
 	// Same for dy²
 	if dy.IsNegative() {
 		dy = dy.Negate()
 	}
 	dy_sq = NewInt128(int64(dy.Lo)).Mul64(int64(dy.Lo))
-	
+
 	result := dx_sq.Add(dy_sq)
 
 	// Distance squared should always be non-negative
