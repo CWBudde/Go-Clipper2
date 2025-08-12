@@ -2,63 +2,6 @@
 // This is a port of the Clipper2 library (https://github.com/AngusJohnson/Clipper2).
 package clipper
 
-// Point64 represents a point with 64-bit integer coordinates
-type Point64 struct {
-	X, Y int64
-}
-
-// Path64 represents a sequence of points forming a path
-type Path64 []Point64
-
-// Paths64 represents a collection of paths
-type Paths64 []Path64
-
-// ClipType specifies the type of boolean operation
-type ClipType uint8
-
-const (
-	Intersection ClipType = iota // intersect subject and clip polygons
-	Union                        // union (OR) subject and clip polygons
-	Difference                   // subtract clip polygons from subject polygons
-	Xor                          // exclusively or (XOR) subject and clip polygons
-)
-
-// FillRule specifies how to determine polygon interiors for self-intersecting polygons
-type FillRule uint8
-
-const (
-	EvenOdd  FillRule = iota // odd numbered sub-regions are filled
-	NonZero                  // non-zero sub-regions are filled
-	Positive                 // positive sub-regions are filled
-	Negative                 // negative sub-regions are filled
-)
-
-// JoinType specifies how path segments are joined during offsetting
-type JoinType uint8
-
-const (
-	Square JoinType = iota // squared-off join
-	Round                  // rounded join
-	Miter                  // mitered join
-)
-
-// EndType specifies how path ends are handled during offsetting
-type EndType uint8
-
-const (
-	ClosedPolygon EndType = iota // end type for closed polygon paths
-	ClosedLine                   // end type for closed line paths
-	OpenSquare                   // end type for open paths - square end cap
-	OpenRound                    // end type for open paths - round end cap
-	OpenButt                     // end type for open paths - butt end cap
-)
-
-// OffsetOptions contains options for path offsetting
-type OffsetOptions struct {
-	MiterLimit   float64 // maximum allowed miter join length (default: 2.0)
-	ArcTolerance float64 // maximum allowed deviation from true arc (default: 0.25)
-}
-
 // Union64 returns the union of subject and clip polygons
 func Union64(subjects, clips Paths64, fillRule FillRule) (Paths64, error) {
 	result, _, err := BooleanOp64(Union, fillRule, subjects, nil, clips)
