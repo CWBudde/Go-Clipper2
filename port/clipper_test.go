@@ -846,10 +846,10 @@ func TestUtilityFunctions(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
-				min, max := minMax64(test.a, test.b)
-				if min != test.expectedMin || max != test.expectedMax {
+				mn, mx := minMax64(test.a, test.b)
+				if mn != test.expectedMin || mx != test.expectedMax {
 					t.Errorf("minMax64(%d, %d) = (%d, %d), expected (%d, %d)",
-						test.a, test.b, min, max, test.expectedMin, test.expectedMax)
+						test.a, test.b, mn, mx, test.expectedMin, test.expectedMax)
 				}
 			})
 		}
