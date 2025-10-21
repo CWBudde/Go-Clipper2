@@ -1,411 +1,497 @@
-# Go Clipper2 Implementation Milestones
+# Go Clipper2 Implementation Roadmap
 
-This document outlines the milestone-based implementation plan for porting
-Clipper2 to pure Go with validated results against the CGO oracle.
-
-## Current Status
-
-- ✅ Project structure and build system established
-- ⚠️ CGO oracle bindings partially implemented (see CGO Integration Challenges
-  below)
-- ✅ Basic utility functions (Area64, IsPositive64, Reverse64)
-- ✅ Rectangle clipping (RectClip64) fully implemented with comprehensive tests
-  and fuzz validation
-- ✅ Core geometry kernel & robust 128-bit integer math implemented with
-  comprehensive tests (CrossProduct128, Area128, DistanceSquared128, segment
-  intersection, winding number, point-in-polygon with all fill rules)
-- ✅ Core boolean operations have complete Vatti algorithm implementation
-  (needs debugging - TestIntersect64Basic failing)
+A milestone-based implementation plan for porting Clipper2 to pure Go with validation against the CGO oracle.
 
 ---
 
-## M0 — Polish the Foundation (Quick Wins) 🏗️
+## 🎯 Project Goal
 
-**Goal: Establish a solid, validated foundation with proper CI/CD**
-
-### Tasks
-
-- [x] Validate module path & imports (fix README placeholder paths in code
-      snippets)
-- [x] Define stable public API surface in `port/` (ensure all types, enums,
-      error values are complete)
-- [x] Ensure every API function has:
-  - [x] Pure Go stub returning `ErrNotImplemented` in `port/impl_pure.go`
-  - [x] Oracle implementation behind `//go:build clipper_cgo` in
-        `port/impl_oracle_cgo.go`
-  - [x] Table-driven tests that run in oracle mode and skip (not fail) in pure
-        mode
-- [x] Set up CI pipeline for Linux/macOS testing both build tags
-- [x] Verify README examples compile with real import path
-
-**Done When:** CI green on Linux/macOS for both build tags; README examples
-compile with the real import path; all API functions have proper stubs and
-oracle implementations.
+Create a **production-ready pure Go port** of the Clipper2 polygon clipping library with:
+- Zero C/C++ dependencies for production deployments
+- Identical results to the original C++ implementation
+- Clean, idiomatic Go API
+- Comprehensive test coverage with property-based testing
 
 ---
 
-## M1 — Pure Go Rectangle Clipping + CGO Oracle Infrastructure 📐
+## 📊 Current Status Summary
 
-**Goal: Implement first complete algorithm as proof-of-concept AND establish
-working CGO oracle**
+### What's Working ✅
 
-### Rectangle Clipping Tasks (COMPLETED)
+**CGO Oracle (Development & Validation Tool)**
+- ✅ **100% Functional** - All 11/11 tests passing
+- ✅ Complete C bridge to vendored Clipper2 C++ source
+- ✅ All boolean operations: Union, Intersection, Difference, XOR
+- ✅ Path offsetting: InflatePaths64 with all join/end types
+- ✅ Rectangle clipping: RectClip64
+- ✅ Proper memory management and error handling
+- ✅ **Production-ready** if pure Go is not required
 
-- [x] Research and implement Sutherland-Hodgman clipping algorithm for
-      `RectClip64`
-- [x] Handle both closed and open paths correctly
-- [x] Add edge case handling (degenerate rectangles, empty inputs, etc.)
-- [x] Implement property-based tests comparing pure vs. oracle across:
-  - [x] Random rectangles and random paths
-  - [x] Edge cases (points on boundaries, fully inside/outside)
-- [x] Document any degenerate cases where results intentionally differ
-- [x] Implement native Go fuzz test (Go 1.18+ `FuzzXxx` functions) to achieve
-      ≥99% match rate between pure Go and CGO oracle implementations
+**Pure Go Implementation - Foundations**
+- ✅ Core utilities: Area64, IsPositive64, Reverse64
+- ✅ Rectangle clipping: RectClip64 (fully tested, fuzz validated)
+- ✅ Robust 128-bit integer math (CrossProduct128, Area128, DistanceSquared128)
+- ✅ Geometry kernel: segment intersection, winding numbers, point-in-polygon
+- ✅ All fill rules implemented: EvenOdd, NonZero, Positive, Negative
 
-### CGO Oracle Infrastructure Tasks ✅ **COMPLETED**
+### What's In Progress 🔧
 
-- [x] Create C++ bridge library for Clipper2 integration:
-  - [x] Design simple C ABI that can be called from CGO (`clipper_bridge.h`)
-  - [x] Implement `clipper_bridge.cc` with C functions wrapping C++ calls
-  - [x] Handle C++ ↔ C type conversions using `cpaths64` array-of-structs
-        layout
-  - [x] Resolve linking issues by vendoring Clipper2 source code
-- [x] Implement core CGO wrapper functions:
-  - [x] `clipper2c_boolean64` wrapper for all boolean operations
-  - [x] `clipper2c_offset64` wrapper for path offsetting
-  - [x] `clipper2c_rectclip64` wrapper for rectangle clipping
-  - [x] `clipper2c_free_paths` for proper memory management
-- [x] Update build system:
-  - [x] Add vendored Clipper2 source files to bridge compilation
-  - [x] Update CGO directives to use vendored headers (`third_party/clipper2`)
-  - [x] Ensure wrapper compiles with C++17 standard
-- [x] Update `capi/clipper_cgo.go` to call bridge functions with proper Go↔C
-      conversion
-- [x] Validate oracle functionality:
-  - [x] All basic boolean operations (Union, Intersection, Difference, XOR)
-        working
-  - [x] Path offsetting (`InflatePaths64`) functional with all join/end types
-  - [x] Rectangle clipping (`RectClip64`) operational
-  - [x] Memory management and error handling working properly
-  - [x] 9/11 CGO tests passing (2 minor vertex ordering differences)
+**Pure Go Implementation - Boolean Operations**
+- 🔧 **Vatti scanline algorithm implemented** (~600 lines in `vatti_engine.go`)
+- 🔧 **Tests pass but produce WRONG results**:
+  - Union: Returns separate polygons instead of merged shape
+  - Intersection: Returns malformed 4-point polygon
+  - Difference/XOR: Incorrect output
+- 🔧 Algorithm structure exists, debugging needed to match oracle behavior
 
-**✅ COMPLETED:** CGO oracle provides real Clipper2 functionality;
-`just test-oracle` runs all tests with actual boolean operations; pure Go
-implementations can now be validated against real C++ Clipper2 results with high
-accuracy.
+### What's Not Started ❌
+
+- ❌ Pure Go polygon offsetting (InflatePaths64)
+- ❌ Advanced operations (Minkowski sum/diff)
+- ❌ Performance optimization
+- ❌ Production documentation and examples
+
+### Overall Progress: **~70% Complete**
+
+- M0: Foundation ✅ **DONE**
+- M1: Rectangle Clipping + CGO Oracle ✅ **DONE**
+- M2: Geometry Kernel ✅ **DONE**
+- M3: Boolean Operations 🔧 **70% - Debugging Needed**
+- M4: Offsetting ❌ **Not Started**
+- M5: Completeness ❌ **Not Started**
+- M6: Production Polish ❌ **Not Started**
 
 ---
 
-## M2 — Core Geometry Kernel & Robust Integer Math 🔧
+## Milestone Details
 
-**Goal: Build bulletproof mathematical foundation for all operations**
+## M0 — Foundation ✅ **COMPLETE**
 
-### Tasks
+**Goal: Project structure, build system, CI/CD**
 
-- [x] Implement robust 128-bit intermediate math using `math/bits` for:
+### Completed Tasks
+- [x] Module path and imports configured
+- [x] Public API surface defined in `port/`
+- [x] Build tag system working:
+  - `port/impl_pure.go` (pure Go implementations)
+  - `port/impl_oracle_cgo.go` (CGO delegations with `-tags=clipper_cgo`)
+  - `capi/` (CGO bindings, all files require `clipper_cgo` tag)
+- [x] CI pipeline for Linux/macOS testing both modes
+- [x] Development commands via `justfile`
+
+---
+
+## M1 — Rectangle Clipping + CGO Oracle ✅ **COMPLETE**
+
+**Goal: First pure Go algorithm + working CGO validation infrastructure**
+
+### Rectangle Clipping (Pure Go)
+- [x] Sutherland-Hodgman clipping algorithm implemented
+- [x] Handles closed and open paths
+- [x] Edge case handling (degenerate rectangles, boundaries, etc.)
+- [x] Property-based tests comparing pure Go vs. oracle
+- [x] Fuzz testing achieving ≥99% match rate
+- [x] All tests passing
+
+### CGO Oracle Infrastructure ✅
+- [x] C++ bridge library (`capi/clipper_bridge.cc` and `clipper_bridge.h`)
+- [x] Vendored Clipper2 source code in `third_party/clipper2/`
+- [x] Core wrapper functions:
+  - `clipper2c_boolean64` - All boolean operations
+  - `clipper2c_offset64` - Path offsetting
+  - `clipper2c_rectclip64` - Rectangle clipping
+  - `clipper2c_free_paths` - Memory management
+- [x] Go↔C data conversion (pack/unpack functions)
+- [x] All CGO tests passing (11/11)
+- [x] **Oracle is production-ready and fully functional**
+
+---
+
+## M2 — Core Geometry Kernel ✅ **COMPLETE**
+
+**Goal: Bulletproof mathematical foundation**
+
+### Completed Tasks
+- [x] Robust 128-bit integer math:
   - [x] Cross products without overflow
   - [x] Area accumulations
   - [x] Distance calculations
-- [x] Add robust segment intersection detection:
-  - [x] Handle collinear overlaps correctly
-  - [x] Manage floating-point edge cases
-  - [x] Include parallel and near-parallel segments
-- [x] Implement winding number and point-in-polygon tests consistent with
-      Clipper2's fill rules
-- [x] Create comprehensive geometry kernel test suite covering:
+- [x] Robust segment intersection:
+  - [x] Collinear overlap handling
+  - [x] Parallel and near-parallel segments
+  - [x] Endpoint and crossing detection
+- [x] Winding number and point-in-polygon tests
+- [x] All fill rules: EvenOdd, NonZero, Positive, Negative
+- [x] Comprehensive test suite:
   - [x] Parallel/collinear/degenerate cases
   - [x] Numerical edge cases near overflow
   - [x] All fill rule behaviors
+  - [x] 900+ lines of geometry tests
 
-**Done When:** Kernel unit tests cover all tricky parallel/collinear/degenerate
-cases; fuzz tests pass; numerical stability validated across range of inputs.
-
----
-
-## M3 — Pure Go Boolean Operations (Scanline + Active Edge List) ✂️
-
-**Goal: Implement complete boolean operations using proven algorithm structure**
-
-### Tasks
-
-✅ **CORE ALGORITHM IMPLEMENTED** (70% complete):
-- [x] Port upstream algorithm structure:
-  - [x] Event queue (local minima detection) - `vertex.go`
-  - [x] Active edge list management - `vatti_engine.go`
-  - [⚠️] Intersection ordering and processing - simplified, needs refinement
-  - [x] Output polygon builder - basic implementation exists
-- [x] Implement all fill rules correctly:
-  - [x] EvenOdd (odd-numbered sub-regions)
-  - [x] NonZero (non-zero winding sub-regions)
-  - [x] Positive (positive winding sub-regions)
-  - [x] Negative (negative winding sub-regions)
-
-**CORE DEBUGGING COMPLETED**:
-- [x] Fixed intersection logic bug (TestIntersect64Basic now passing)
-- [x] Fixed winding count calculation for proper polygon coverage detection
-- [x] Fixed horizontal edge exclusion in local minima processing
-- [x] Fixed output point building and polygon linking for intersection operations
-- [ ] Start with simple cases (disjoint/overlapping rectangles) then generalize
-      to:
-  - [ ] Complex polygons with holes
-  - [ ] Self-intersecting polygons
-  - [ ] Open paths (lines)
-- [ ] Extensive validation against oracle implementation
-
-**Done When:** Pure vs. oracle parity across large randomized test suite;
-boolean operations produce identical path counts and nearly identical point sets
-(allowing tiny tolerance on point ordering).
+**Status:** Kernel is production-ready and fully tested.
 
 ---
 
-## M4 — Pure Go Offsetting (ClipperOffset) 📏
+## M3 — Pure Go Boolean Operations 🔧 **70% COMPLETE - DEBUGGING**
+
+**Goal: Implement and debug Vatti scanline algorithm for all boolean operations**
+
+### Algorithm Implementation Status
+
+**✅ Implemented (but buggy):**
+- [x] Vatti scanline algorithm structure (~600 lines)
+- [x] Event queue (local minima detection) - `vertex.go`
+- [x] Active edge list management - `vatti_engine.go`
+- [x] Intersection detection and processing
+- [x] Output polygon builder
+- [x] All fill rules: EvenOdd, NonZero, Positive, Negative
+- [x] ClipType handling: Union, Intersection, Difference, XOR
+
+**🔧 Debugging Needed:**
+
+The pure Go implementation has all the algorithm structure but produces incorrect results. Tests pass without errors but output doesn't match oracle.
+
+### Current Test Results
+
+**Pure Go vs. Oracle Comparison:**
+
+| Operation      | Pure Go Result                    | Oracle Result                     | Status   |
+|----------------|-----------------------------------|-----------------------------------|----------|
+| Union          | 2 separate polygons               | 1 merged polygon                  | ❌ Wrong |
+| Intersection   | Malformed 4-point polygon         | Correct intersection square       | ❌ Wrong |
+| Difference     | Returns subject unchanged         | Correct difference                | ❌ Wrong |
+| XOR            | Returns all input polygons        | Correct symmetric difference      | ❌ Wrong |
+
+### Debugging Tasks
+
+**Priority 1: Fix Core Algorithm Bugs**
+- [ ] Debug Union operation:
+  - [ ] Trace why polygons aren't being merged
+  - [ ] Check output polygon linking logic
+  - [ ] Verify winding count calculations for union
+- [ ] Debug Intersection operation:
+  - [ ] Investigate malformed output polygon
+  - [ ] Check intersection point calculation
+  - [ ] Verify edge list management during intersection
+- [ ] Debug Difference operation:
+  - [ ] Check why clip paths aren't subtracting
+  - [ ] Verify clip type handling in Vatti engine
+- [ ] Debug XOR operation:
+  - [ ] Check symmetric difference logic
+  - [ ] Verify proper region extraction
+
+**Priority 2: Systematic Testing**
+- [ ] Start with simplest cases (disjoint rectangles)
+- [ ] Add overlapping rectangles
+- [ ] Test adjacent rectangles (shared edges)
+- [ ] Complex polygons with holes
+- [ ] Self-intersecting polygons
+- [ ] Open paths (lines)
+
+**Priority 3: Oracle Validation**
+- [ ] Property-based testing comparing pure Go vs. oracle
+- [ ] Fuzz testing for edge cases
+- [ ] Achieve ≥99% match rate across random inputs
+
+### Debugging Strategy
+
+1. **Add detailed logging** to Vatti engine to trace:
+   - Local minima detection
+   - Edge insertion/removal from active list
+   - Intersection calculations
+   - Output point generation
+   - Polygon linking
+
+2. **Compare step-by-step** with reference implementation in `third_party/clipper2/`
+
+3. **Test incrementally**:
+   - Fix one operation at a time (start with Intersection)
+   - Add test case, debug until it passes
+   - Move to next operation
+
+4. **Use oracle as ground truth**:
+   - Every test case should pass with `-tags=clipper_cgo`
+   - Pure Go should match oracle output exactly
+
+**Done When:**
+- All boolean operations produce identical results to oracle
+- Tests pass in both pure Go and CGO modes
+- ≥99% match rate on property-based/fuzz tests
+- Complex polygons (holes, self-intersecting) handled correctly
+
+---
+
+## M4 — Pure Go Offsetting ❌ **NOT STARTED**
 
 **Goal: Complete polygon offsetting with all join and end types**
 
 ### Tasks
-
-- [ ] Implement core offsetting algorithm for both expansion and contraction
+- [ ] Implement core offsetting algorithm (expansion/contraction)
 - [ ] Add all join types:
-  - [ ] Round joins with configurable arc approximation
-  - [ ] Miter joins with miter limit control
+  - [ ] Round joins with arc approximation
+  - [ ] Miter joins with miter limit
   - [ ] Square joins for sharp corners
-- [ ] Support all end types for closed and open paths:
+- [ ] Support all end types:
   - [ ] ClosedPolygon and ClosedLine
   - [ ] OpenSquare, OpenRound, OpenButt end caps
 - [ ] Implement precision controls:
-  - [ ] MiterLimit for controlling spike length
+  - [ ] MiterLimit for spike length control
   - [ ] ArcTolerance for round approximation quality
-- [ ] Validate against oracle across grid of:
+- [ ] Validate against oracle:
   - [ ] Various deltas (positive and negative)
-  - [ ] All join type combinations
-  - [ ] Noisy inputs with self-intersections
+  - [ ] All join/end type combinations
+  - [ ] Self-intersecting inputs
 
-**Done When:** Parity vs. oracle across comprehensive test matrix; miter spikes
-properly controlled; round arcs stable with configurable tolerance; all join/end
-type combinations working.
+**Prerequisites:**
+- M3 must be complete (debugging fixed)
+- Reference implementation in `third_party/clipper2/CPP/Clipper2Lib/src/clipper.offset.cpp`
+
+**Done When:**
+- Parity with oracle across comprehensive test matrix
+- All join/end types working correctly
+- Miter/arc controls functioning properly
 
 ---
 
-## M5 — Completeness Features & API Polish 🎯
+## M5 — Completeness Features ❌ **NOT STARTED**
 
-**Goal: Complete feature set and prepare for production use**
+**Goal: Complete feature set and production API**
 
 ### Tasks
-
 - [ ] Implement missing utility functions:
-  - [ ] `PointInPolygon` with all fill rule support
-  - [ ] `Bounds/BoundingRect` calculation
-  - [ ] `ReversePaths` for batch operations
-  - [ ] `Simplify/CleanPolygon` (Douglas-Peucker or Clipper2-style)
+  - [ ] `PointInPolygon` (currently in geometry.go, need to expose as public API)
+  - [ ] `Bounds64`/`BoundingRect` calculation
+  - [ ] `ReversePaths64` for batch operations
+  - [ ] `SimplifyPath64`/`CleanPolygon64`
 - [ ] Add advanced operations:
-  - [ ] `MinkowskiSum` and `MinkowskiDiff` operations
-  - [ ] `PolyTree`/`PolyPath` hierarchy support if needed
-- [ ] API improvements:
-  - [ ] Error handling consistency
+  - [ ] `MinkowskiSum64` and `MinkowskiDiff64`
+  - [ ] `PolyTree`/`PolyPath` hierarchy if needed
+- [ ] API polish:
+  - [ ] Consistent error handling across all functions
   - [ ] Input validation and sanitization
   - [ ] Memory-efficient path operations
-- [ ] Document any intentional deviations from Clipper2 naming/behavior
-- [ ] Create migration notes from other polygon libraries
+- [ ] Documentation:
+  - [ ] Document deviations from C++ Clipper2 (if any)
+  - [ ] Migration guide from other polygon libraries
+  - [ ] Best practices guide
 
-**Done When:** Feature checklist matches Clipper2 documentation; examples mirror
-upstream behavior; API is clean and Go-idiomatic; migration guide available.
+**Done When:**
+- Feature parity with Clipper2 C++ library
+- API is clean and Go-idiomatic
+- Examples mirror upstream behavior
+- Migration documentation complete
 
 ---
 
-## M6 — Performance & Production Readiness 🚀
+## M6 — Performance & Production Readiness ❌ **NOT STARTED**
 
-**Goal: Optimize performance and prepare for public release**
+**Goal: Optimize and prepare for public release**
 
 ### Tasks
-
-- [ ] Comprehensive benchmarking suite:
+- [ ] Comprehensive benchmarking:
   - [ ] Boolean operations across varied vertex counts
   - [ ] Offsetting with different complexities
-  - [ ] Nested holes and complex polygon handling
+  - [ ] Nested holes and complex polygons
   - [ ] Memory allocation profiling
 - [ ] Performance optimizations:
   - [ ] Memory tuning (pre-allocation, slice reuse)
-  - [ ] Optional concurrency for large batch operations
+  - [ ] Optional concurrency for batch operations
   - [ ] Critical path optimization based on profiling
 - [ ] Production readiness:
   - [ ] Complete API documentation with examples
-  - [ ] "compat tests" folder reproducing subset of upstream test corpus
-  - [ ] CI/CD pipeline with multiple Go versions and platforms
+  - [ ] Compat test suite reproducing upstream test cases
+  - [ ] Multi-platform CI/CD (Linux, macOS, Windows)
   - [ ] Performance regression testing
-- [ ] Documentation and examples:
+- [ ] Documentation:
   - [ ] Usage guides and tutorials
-  - [ ] Performance comparison documentation
-  - [ ] Best practices guide
+  - [ ] Performance comparison with C++ version
+  - [ ] Architecture documentation
 
-**Done When:** Pure Go performance within acceptable factor of C++ oracle for
-common workloads; comprehensive documentation ready; CI pipeline robust; ready
-for tagged release.
-
----
-
-## CGO Integration Challenges
-
-During implementation of the CGO oracle bindings (`capi/clipper_cgo.go`),
-several significant technical challenges were encountered that future developers
-should be aware of:
-
-### Challenge 1: C++ Library Installation and Linking
-
-**Issue**: The system has Clipper2 headers installed
-(`/usr/local/include/clipper2/`) but no corresponding shared/static libraries
-for linking.
-
-**Evidence**:
-
-- Headers exist and compile correctly
-- Linker fails with "undefined reference" errors for `BooleanOp64`,
-  `InflatePaths64`, etc.
-- `ldconfig -p | grep clipper` shows wrong libraries (crystallography tools, not
-  Clipper2)
-
-**Root Cause**: Clipper2 appears to be header-only or the library installation
-is incomplete.
-
-**Resolution Needed**: Either:
-
-1. Properly build/install Clipper2 with shared libraries (`libClipper2.so`)
-2. Use header-only approach by including full implementation in wrapper
-3. Build Clipper2 as static library and link appropriately
-
-### Challenge 2: C++ Namespace and Type Issues
-
-**Issue**: Clipper2 uses C++ namespaces (`Clipper2Lib::`) and complex type
-system that CGO cannot handle directly.
-
-**Evidence**: Compilation errors about `CPaths64`, `CRect64` not being
-recognized when declared outside namespace.
-
-**Approach Taken**: Created C++ wrapper file (`clipper_wrapper.cpp`) with
-`extern "C"` functions to bridge C++ API to C-compatible interface.
-
-**Challenges Encountered**:
-
-- Type system complexity (templates, namespaces, references)
-- Header inclusion issues (some headers have internal compilation errors)
-- Memory management differences between C++ and Go
-
-### Challenge 3: Header-Only Implementation Complexity
-
-**Issue**: Clipper2's export functions are implemented inline in headers, making
-it difficult to create clean forward declarations.
-
-**Evidence**: Functions like `BooleanOp64` are fully implemented in
-`clipper.export.h` rather than being library symbols.
-
-**Implications**:
-
-- Cannot simply declare extern functions - need full implementation
-- Must include problematic headers (which have their own compilation issues)
-- Complex build chain with multiple C++ standards and dependencies
-
-### Challenge 4: Data Structure Conversion
-
-**Implementation Status**: ✅ **COMPLETED**
-
-- `packPaths64()`: Converts Go `Paths64` to Clipper2 `CPaths64` format
-- `unpackPaths64()`: Converts Clipper2 results back to Go format
-- Format: `[arraylen, pathcount, [pathlen, 0, x1,y1, x2,y2, ...], ...]`
-
-**Testing**: Ready for validation once linking issues are resolved.
-
-### Current Workaround
-
-The CGO wrapper implementation is structured but returns `ErrNotImplemented` due
-to linking issues. The following components are ready:
-
-1. ✅ Data conversion functions (pack/unpack)
-2. ✅ Go function signatures matching C++ API
-3. ✅ C++ wrapper skeleton (`clipper_wrapper.cpp`)
-4. ❌ Actual C++ library linking and compilation
-
-### Recommendations for Future Work
-
-1. **Prioritize Library Installation**: Ensure Clipper2 is properly
-   built/installed with shared libraries before attempting CGO integration
-
-2. **Alternative Approach**: Consider using Clipper2 as a git submodule and
-   building it as part of the Go build process
-
-3. **Testing Strategy**: The pack/unpack functions can be tested independently
-   once basic CGO compilation works
-
-4. **Build System**: May need custom build script or Makefile to handle C++
-   compilation complexity
-
-This documents the current state so future developers don't repeat the same
-investigation and can focus on the specific linking/installation issues.
+**Done When:**
+- Pure Go performance within 2-3x of C++ oracle
+- Comprehensive documentation ready
+- CI pipeline robust across platforms
+- Ready for v1.0.0 tagged release
 
 ---
 
-## Success Criteria
+## Development Workflow
 
-### Functional Requirements
+### Build and Test Commands
 
-- ✅ **Feature Parity**: All core Clipper2 operations implemented and validated
-- ✅ **Result Accuracy**: Pure Go matches oracle within acceptable numerical
-  tolerance
-- ✅ **Fill Rule Support**: All four fill rules working correctly
-- ✅ **Join/End Types**: Complete offsetting support
+```bash
+# Pure Go mode (default)
+just build          # Build all packages
+just test           # Run all tests
+just test-port      # Test only port package
+just dev            # Format + lint + test
 
-### Quality Requirements
+# CGO Oracle mode (validation)
+just build-oracle   # Build with CGO
+just test-oracle    # Test with oracle validation
+just test-capi      # Test only CGO bindings
+just dev-oracle     # Full dev workflow with oracle
 
-- ✅ **Validation Coverage**: Property-based tests comparing pure vs. oracle
-- ✅ **Fuzz Testing**: Edge cases and numerical stability validated
-- ✅ **Performance**: Within reasonable factor (2-3x) of C++ for typical
-  workloads
-- ✅ **Reliability**: Handles degenerate inputs gracefully
+# Specific tests
+just test-run TestIntersect64Basic           # Pure Go
+just test-run-oracle TestIntersect64Basic    # With oracle
 
-### Production Requirements
+# Code quality
+just fmt            # Format code
+just lint           # Run linters
+just lint-fix       # Auto-fix lint issues
+```
 
-- ✅ **API Stability**: Clean, Go-idiomatic interface
-- ✅ **Documentation**: Complete with examples and migration guides
-- ✅ **CI/CD**: Multi-platform testing and performance monitoring
-- ✅ **Release Ready**: Tagged releases with semantic versioning
+### Testing Philosophy
+
+1. **Test with Oracle First**
+   - Write test case
+   - Verify it passes with `-tags=clipper_cgo`
+   - Oracle provides ground truth
+
+2. **Implement Pure Go**
+   - Implement algorithm in `port/impl_pure.go`
+   - Test should pass without `-tags=clipper_cgo`
+   - Results should match oracle exactly
+
+3. **Property-Based Testing**
+   - Random inputs validated against oracle
+   - Fuzz testing for edge cases
+   - Target: ≥99% match rate
+
+4. **Debug Discrepancies**
+   - Use oracle output as expected result
+   - Add detailed logging to pure Go implementation
+   - Compare step-by-step with reference C++ code
 
 ---
 
 ## Implementation Strategy
 
-### Development Approach
+### Current Focus: M3 Debugging (Next 2-4 weeks)
 
-1. **Milestone-Driven**: Complete each milestone fully before proceeding
-2. **Oracle Validation**: Continuously compare against CGO reference
-3. **Test-First**: Write property-based tests before implementation
-4. **Performance Aware**: Profile and optimize at each milestone
+**Immediate priorities:**
+1. Fix Intersection operation first (simplest case)
+2. Add comprehensive logging to Vatti engine
+3. Test with minimal test cases (2 overlapping rectangles)
+4. Compare with reference implementation step-by-step
+5. Once Intersection works, apply learnings to Union/Difference/XOR
 
-### Build System
+### After M3 Complete:
 
-- **Default Mode**: Pure Go implementation (`port/impl_pure.go`)
-- **Oracle Mode**: CGO validation (`port/impl_oracle_cgo.go` with
-  `-tags=clipper_cgo`)
-- **Continuous Integration**: Both modes tested on every commit
+**M4: Offsetting (4-6 weeks)**
+- Study reference implementation in `clipper.offset.cpp`
+- Start with simple expansion/contraction
+- Add join types incrementally
+- Validate each step against oracle
 
-### Testing Philosophy
+**M5: Completeness (2-3 weeks)**
+- Straightforward utility functions
+- API cleanup and documentation
+- No complex algorithms
 
-- **Property-Based**: Random inputs validated against oracle
-- **Fuzz Testing**: Edge cases and numerical stability
-- **Acceptance Criteria**: 99%+ match rate with documented exceptions
-- **Performance**: Benchmarked against reference implementation
+**M6: Production Polish (3-4 weeks)**
+- Performance profiling and optimization
+- Comprehensive documentation
+- CI/CD hardening
+- Release preparation
 
-### Numerical Precision
-
-- **128-bit Intermediate Math**: Prevent overflow in calculations
-- **Acceptable Tolerances**: Document precision limitations
-- **Edge Case Handling**: Graceful degradation for degenerate inputs
+**Estimated Timeline:** 3-5 months to v1.0.0 (assuming part-time development)
 
 ---
 
-**Estimated Timeline**: 6-8 months (assuming part-time development)
+## Success Criteria
 
-**Current Milestone**: M3 - Pure Go Boolean Operations **90% COMPLETE**
+### Functional Requirements ✅/🔧/❌
 
-- [x] Full Vatti scanline algorithm implemented
-- [x] Core algorithm structure and fill rules complete
-- [x] Basic rectangular intersection cases working
+- ✅ **CGO Oracle**: Complete and production-ready
+- 🔧 **Boolean Operations**: Implemented but debugging needed
+- ✅ **Fill Rules**: All four working correctly
+- ❌ **Offsetting**: Not yet implemented
+- ✅ **Rectangle Clipping**: Complete and tested
+- ✅ **Geometry Kernel**: Production-ready
 
-**Next Milestone**: Complete M3 debugging, then M4 - Pure Go Offsetting
+### Quality Requirements
+
+- ✅ **Oracle Validation**: Infrastructure complete
+- ✅ **Fuzz Testing**: Framework in place (used for RectClip)
+- 🔧 **Result Accuracy**: Needs debugging to match oracle
+- ❌ **Performance**: Not yet optimized
+
+### Production Requirements
+
+- 🔧 **API Stability**: Mostly stable, needs polish in M5
+- 🔧 **Documentation**: Basic docs exist, needs expansion
+- ✅ **CI/CD**: Working for both build modes
+- ❌ **Release**: Not ready (M3 must complete first)
+
+---
+
+## Notes for Developers
+
+### CGO Oracle is Production-Ready ✅
+
+If you need Clipper2 functionality in Go **right now** and don't mind the C++ dependency:
+- Use `-tags=clipper_cgo` when building
+- All operations work correctly (11/11 tests passing)
+- Performance is excellent (native C++ speed)
+- Fully tested and validated
+
+The pure Go implementation is still in development primarily for:
+- Zero-dependency deployments
+- Cross-compilation simplicity
+- WebAssembly support
+- Educational/research purposes
+
+### Debugging Pure Go Boolean Operations
+
+The Vatti algorithm implementation exists but has bugs. To help debug:
+
+1. **Enable logging** in `vatti_engine.go` (add print statements)
+2. **Start simple** - use 2 overlapping rectangles as test case
+3. **Compare with reference** - `third_party/clipper2/CPP/Clipper2Lib/src/clipper.engine.cpp`
+4. **Check intermediate steps**:
+   - Are local minima detected correctly?
+   - Is the active edge list managed properly?
+   - Are intersections calculated correctly?
+   - Are output points generated correctly?
+   - Is polygon linking working?
+
+5. **Oracle is always right** - if pure Go differs from oracle, pure Go is wrong
+
+### Code Organization
+
+```
+port/
+├── clipper.go              # Public API
+├── types.go                # Type definitions
+├── errors.go               # Error constants
+├── impl_pure.go            # Pure Go implementations (entry points)
+├── impl_oracle_cgo.go      # CGO delegations (build tag: clipper_cgo)
+├── vatti_engine.go         # Vatti scanline algorithm (🔧 DEBUGGING)
+├── vertex.go               # Vertex chain and local minima
+├── boolean_simple.go       # Legacy simple implementations (unused)
+├── rectangle_clipping.go   # RectClip64 (✅ complete)
+├── geometry.go             # Geometry utilities (✅ complete)
+├── math128.go              # 128-bit integer math (✅ complete)
+└── *_test.go               # Tests
+
+capi/
+├── clipper_cgo.go          # CGO bindings (✅ complete)
+├── clipper_cgo_test.go     # CGO tests (✅ all passing)
+└── clipper_bridge.*        # C++ wrapper (✅ complete)
+```
+
+### File Sizes (Lines of Code)
+
+- `vatti_engine.go`: 588 lines (core algorithm)
+- `vertex.go`: 214 lines (vertex chain handling)
+- `geometry.go`: 272 lines (utility functions)
+- `math128.go`: 235 lines (robust arithmetic)
+- Total implementation: ~5,200 lines of Go code
+
+---
+
+**Last Updated:** 2025-10-21
+**Current Milestone:** M3 (Boolean Operations - Debugging)
+**Next Release Target:** v0.3.0 (when M3 complete)
