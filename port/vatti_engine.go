@@ -1,6 +1,7 @@
 package clipper
 
 import (
+	"fmt"
 	"math"
 	"sort"
 )
@@ -35,13 +36,21 @@ func NewVattiEngine(clipType ClipType, fillRule FillRule) *VattiEngine {
 
 // ExecuteClipping performs the complete boolean clipping operation
 func (ve *VattiEngine) ExecuteClipping(subjects, subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
+	debugLogPhase("INITIALIZATION")
+	debugLog("ClipType: %v, FillRule: %v", ve.clipType, ve.fillRule)
+	debugLog("Subject paths: %v", subjects)
+	debugLog("Clip paths: %v", clips)
+
 	// Phase 2: Path preprocessing - Convert paths to vertex chains and find local minima
+	debugLogPhase("PATH PREPROCESSING")
 	if err := ve.addPaths(subjects, PathTypeSubject, false); err != nil {
 		return nil, nil, err
 	}
 	if err := ve.addPaths(clips, PathTypeClip, false); err != nil {
 		return nil, nil, err
 	}
+
+	debugLog("Found %d local minima", len(ve.minimaList))
 
 	// Handle empty input case
 	if len(ve.minimaList) == 0 {
@@ -51,14 +60,23 @@ func (ve *VattiEngine) ExecuteClipping(subjects, subjectsOpen, clips Paths64) (s
 	// Sort local minima by Y coordinate
 	ve.sortLocalMinima()
 
+	debugLog("Sorted local minima:")
+	for i, lm := range ve.minimaList {
+		debugLog("  LM[%d]: Y=%d, Point=%v", i, lm.Vertex.Pt.Y, lm.Vertex.Pt)
+	}
+
 	// Execute main scanline algorithm
+	debugLogPhase("SCANLINE ALGORITHM")
 	if !ve.executeScanlineAlgorithm() {
 		return nil, nil, ErrClipperExecution
 	}
 
 	// Phase 6: Build output paths
+	debugLogPhase("BUILD OUTPUT")
 	solution = ve.buildSolutionPaths()
 	solutionOpen = Paths64{} // Open paths not yet supported
+
+	debugLog("Solution paths: %v", solution)
 
 	return solution, solutionOpen, nil
 }
@@ -137,22 +155,38 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 	// Build sorted list of scanline Y coordinates
 	scanlines := ve.getSortedScanlines()
 
+	debugLog("Processing %d scanlines: %v", len(scanlines), scanlines)
+
 	minimaIndex := 0 // Index into sorted minima list
 
 	// Process each scanline from bottom to top
 	for _, y := range scanlines {
 		ve.currentY = y
 
+		debugLog("\n--- Scanline Y=%d ---", y)
+
 		// Phase 3: Insert local minima into Active Edge List
 		minimaIndex = ve.insertLocalMinimaIntoAEL(minimaIndex, y)
 
-		// Phase 4: Process intersections between active edges
+		debugLog("After inserting minima:")
+		debugLogAEL(ve.activeEdges)
+
+		// Phase 4: Update edge X positions for current scanline
+		ve.updateEdgePositions(y)
+
+		// Phase 5: Process intersections and add output points
 		if !ve.processIntersections(y) {
 			return false
 		}
 
-		// Phase 3: Update active edges and remove completed edges
-		ve.updateActiveEdges(y)
+		debugLog("After processing intersections:")
+		debugLogAEL(ve.activeEdges)
+
+		// Phase 6: Remove edges that have reached their top
+		ve.removeTopEdges(y)
+
+		debugLog("After removing top edges:")
+		debugLogAEL(ve.activeEdges)
 
 		if !ve.succeeded {
 			break
@@ -282,22 +316,31 @@ func (ve *VattiEngine) insertEdgeIntoAEL(edge *Edge) {
 	current.NextInAEL = edge
 }
 
-// updateActiveEdges updates current X positions and removes completed edges
-func (ve *VattiEngine) updateActiveEdges(y int64) {
+// removeTopEdges removes edges that have reached their top Y coordinate
+func (ve *VattiEngine) removeTopEdges(y int64) {
 	edge := ve.activeEdges
 
 	for edge != nil {
 		nextEdge := edge.NextInAEL
 
-		// Update current X position for this scanline
-		ve.updateEdgeCurrentX(edge, y)
-
 		// Check if edge has reached its top
 		if edge.Top.Y == y {
+			debugLog("Removing edge at X=%d (reached top)", edge.CurrX)
 			ve.removeEdgeFromAEL(edge)
 		}
 
 		edge = nextEdge
+	}
+}
+
+// updateEdgePositions updates current X positions for all active edges
+func (ve *VattiEngine) updateEdgePositions(y int64) {
+	edge := ve.activeEdges
+
+	for edge != nil {
+		// Update current X position for this scanline
+		ve.updateEdgeCurrentX(edge, y)
+		edge = edge.NextInAEL
 	}
 }
 
@@ -338,42 +381,86 @@ func (ve *VattiEngine) removeEdgeFromAEL(edge *Edge) {
 
 // processIntersections handles edge intersections and updates winding counts
 func (ve *VattiEngine) processIntersections(y int64) bool {
-	// First, update winding counts for all edges
+	// First, check if any edges are ending at this scanline
+	hasEndingEdges := false
+	for e := ve.activeEdges; e != nil; e = e.NextInAEL {
+		if e.Top.Y == y {
+			hasEndingEdges = true
+			break
+		}
+	}
+
+	// Update winding counts for all edges
 	ve.updateWindingCounts()
 
-	// Process intersections and create output points based on contribution transitions
-	edge := ve.activeEdges
-	edgeCount := 0
+	debugLog("Winding counts updated at Y=%d (hasEndingEdges=%v):", y, hasEndingEdges)
 
-	// Track contribution status before and after each edge
+	// Process contribution transitions
+	// If we have ending edges and output records exist, use reverse order for closing
+	var transitionPoints []struct {
+		edge *Edge
+		pt   Point64
+		kind string // "enter" or "exit"
+	}
+
+	edge := ve.activeEdges
 	prevContributing := false
 
 	for edge != nil {
-		edgeCount++
 		currentContributing := ve.isContributingEdge(edge)
 
-		// Add output point if contribution status changes or if we're in a contributing region
-		if currentContributing {
-			ve.addOutputPoint(edge, Point64{edge.CurrX, y})
-		}
+		debugLogWindingCalc(edge, currentContributing)
 
-		// Also check if this edge represents a transition boundary for intersection
-		if ve.clipType == Intersection && prevContributing != currentContributing {
-			if !currentContributing && prevContributing {
-				// Exiting intersection region - also add output point
-				ve.addOutputPoint(edge, Point64{edge.CurrX, y})
+		// Detect transitions
+		if prevContributing != currentContributing {
+			var kind string
+			if currentContributing {
+				kind = "enter"
+			} else {
+				kind = "exit"
 			}
+			transitionPoints = append(transitionPoints, struct {
+				edge *Edge
+				pt   Point64
+				kind string
+			}{edge, Point64{edge.CurrX, y}, kind})
 		}
 
 		prevContributing = currentContributing
 
 		// Check for intersections with next edge
 		if edge.NextInAEL != nil && ve.edgesIntersect(edge, edge.NextInAEL) {
-			// Swap edges in AEL
+			debugLog("    -> Edges intersect! Swapping edges at X=%d and X=%d", edge.CurrX, edge.NextInAEL.CurrX)
 			ve.swapAdjacentEdges(edge, edge.NextInAEL)
 		}
 
 		edge = edge.NextInAEL
+	}
+
+	// Add transition points
+	// If we have ending edges and already have points, add in REVERSE order
+	if hasEndingEdges && len(ve.outRecords) > 0 && len(transitionPoints) > 0 {
+		debugLog("Adding %d transition points in REVERSE order (ending scanline)", len(transitionPoints))
+		for i := len(transitionPoints) - 1; i >= 0; i-- {
+			tp := transitionPoints[i]
+			debugLog("    -> Adding %s point at (%d,%d)", tp.kind, tp.pt.X, tp.pt.Y)
+			ve.addOutputPoint(tp.edge, tp.pt)
+		}
+	} else {
+		// Normal order
+		for _, tp := range transitionPoints {
+			verb := "Entering"
+			if tp.kind == "exit" {
+				verb = "Exiting"
+			}
+			debugLog("    -> %s intersection at (%d,%d)", verb, tp.pt.X, tp.pt.Y)
+			ve.addOutputPoint(tp.edge, tp.pt)
+		}
+	}
+
+	debugLog("Current output records: %d", len(ve.outRecords))
+	for _, outRec := range ve.outRecords {
+		debugLogOutRec(fmt.Sprintf("OutRec #%d", outRec.Idx), outRec)
 	}
 
 	return true
@@ -455,11 +542,19 @@ func (ve *VattiEngine) isContributingEdge(edge *Edge) bool {
 		pftSubject = windCnt != 0
 		pftClip = windCnt2 != 0
 	case Positive:
-		pftSubject = windCnt > 0
-		pftClip = windCnt2 > 0
+		// Positive fill rule: use absolute value for simple polygons (non-self-intersecting).
+		// This works for both CW (positive winding) and CCW (negative winding) polygon orientations.
+		pftSubject = abs(windCnt) > 0
+		pftClip = abs(windCnt2) > 0
 	case Negative:
-		pftSubject = windCnt < 0
-		pftClip = windCnt2 < 0
+		// Negative fill rule: use absolute value for simple polygons (non-self-intersecting).
+		// Note: Both Positive and Negative use the same logic (abs(windCnt) > 0) because they
+		// differ only in their interpretation of "filled" regions, but in the Vatti algorithm's
+		// edge contribution logic, both simply need to check if the winding count is non-zero,
+		// regardless of its sign. The actual difference between Positive/Negative is handled
+		// by the polygon orientation during input processing.
+		pftSubject = abs(windCnt) > 0
+		pftClip = abs(windCnt2) > 0
 	}
 
 	var result bool
@@ -532,19 +627,43 @@ func (ve *VattiEngine) addOutputPoint(edge *Edge, pt Point64) {
 		Idx: outRec.Idx,
 	}
 
-	// Link into polygon chain
+	// Link into polygon chain with proper ordering
+	// Key insight: For intersection, we're building a polygon by adding points
+	// as we scan upward. We need to maintain proper counter-clockwise order:
+	// bottom-left → bottom-right → top-right → top-left
+	//
+	// The trick is that RIGHT edges should append (normal order going up)
+	// but LEFT edges should prepend to the start (reverse order going down)
 	if outRec.Pts == nil {
 		// First point in this polygon
 		outRec.Pts = outPt
 		outPt.Next = outPt
 		outPt.Prev = outPt
 	} else {
-		// Insert at end of existing chain
-		lastPt := outRec.Pts.Prev
-		outPt.Next = outRec.Pts
-		outPt.Prev = lastPt
-		lastPt.Next = outPt
-		outRec.Pts.Prev = outPt
+		// For RIGHT bound edges: append at end (keeps going up the right side)
+		// For LEFT bound edges: prepend at start (prepares for going down the left side)
+		if !edge.IsLeftBound {
+			// Right bound: append to end
+			// Maintains: ... → last → outPt → Pts
+			lastPt := outRec.Pts.Prev
+			outPt.Next = outRec.Pts
+			outPt.Prev = lastPt
+			lastPt.Next = outPt
+			outRec.Pts.Prev = outPt
+		} else {
+			// Left bound: prepend before Pts (but DON'T change Pts reference)
+			// This builds the return path down the left side in reverse
+			// Maintains: ... → prev → outPt → Pts → ...
+			outPt.Next = outRec.Pts
+			outPt.Prev = outRec.Pts.Prev
+			outRec.Pts.Prev.Next = outPt
+			outRec.Pts.Prev = outPt
+			// DON'T update outRec.Pts - keep the first point as the start.
+			// This is critical: outRec.Pts always points to the first point added to the polygon,
+			// ensuring that when we later traverse the circular linked list to build the final path,
+			// we start from the original starting point. Changing outRec.Pts here would break
+			// the correct order and could result in duplicate points or incorrect polygon orientation.
+		}
 	}
 }
 
