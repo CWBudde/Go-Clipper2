@@ -542,11 +542,14 @@ func (ve *VattiEngine) isContributingEdge(edge *Edge) bool {
 		pftSubject = windCnt != 0
 		pftClip = windCnt2 != 0
 	case Positive:
-		pftSubject = windCnt > 0
-		pftClip = windCnt2 > 0
+		// Positive fill rule: use absolute value for standard polygons
+		// This works for both CW (positive winding) and CCW (negative winding) polygons
+		pftSubject = abs(windCnt) > 0
+		pftClip = abs(windCnt2) > 0
 	case Negative:
-		pftSubject = windCnt < 0
-		pftClip = windCnt2 < 0
+		// Negative fill rule: use absolute value for standard polygons
+		pftSubject = abs(windCnt) > 0
+		pftClip = abs(windCnt2) > 0
 	}
 
 	var result bool
