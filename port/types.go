@@ -39,23 +39,26 @@ const (
 )
 
 // JoinType specifies how path segments are joined during offsetting
+// Matches Clipper2 C++ enum exactly for oracle compatibility
 type JoinType uint8
 
 const (
-	Square JoinType = iota // squared-off join
-	Round                  // rounded join
-	Miter                  // mitered join
+	JoinSquare JoinType = iota // squared-off join at exactly offset distance
+	JoinBevel                  // beveled join (simplest - just two offset points)
+	JoinRound                  // rounded join with arc approximation
+	JoinMiter                  // mitered join with miter limit
 )
 
 // EndType specifies how path ends are handled during offsetting
+// Matches Clipper2 C++ enum exactly for oracle compatibility
 type EndType uint8
 
 const (
-	ClosedPolygon EndType = iota // end type for closed polygon paths
-	ClosedLine                   // end type for closed line paths
-	OpenSquare                   // end type for open paths - square end cap
-	OpenRound                    // end type for open paths - round end cap
-	OpenButt                     // end type for open paths - butt end cap
+	EndPolygon EndType = iota // closed polygon (offsets only one side)
+	EndJoined                 // open path with joined ends (treated as closed)
+	EndButt                   // open path with square blunt ends
+	EndSquare                 // open path with square extended ends
+	EndRound                  // open path with round extended ends
 )
 
 // OffsetOptions contains options for path offsetting

@@ -38,15 +38,17 @@ typedef enum {
 
 typedef enum {
   C_JOIN_SQUARE = 0,
-  C_JOIN_ROUND  = 1,
-  C_JOIN_MITER  = 2
+  C_JOIN_BEVEL  = 1,
+  C_JOIN_ROUND  = 2,
+  C_JOIN_MITER  = 3
 } c_jointype;
 
 typedef enum {
-  C_END_BUTT   = 0,
-  C_END_SQUARE = 1,
-  C_END_ROUND  = 2,
-  C_END_JOINED = 3
+  C_END_POLYGON = 0,
+  C_END_JOINED  = 1,
+  C_END_BUTT    = 2,
+  C_END_SQUARE  = 3,
+  C_END_ROUND   = 4
 } c_endtype;
 
 // Returns 0 on success; nonzero on failure.

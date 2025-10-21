@@ -210,7 +210,7 @@ func abs(x int64) int64 {
 
 func TestInflatePaths64(t *testing.T) {
 	square := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
-	inflated, err := InflatePaths64(square, 2 /*Miter*/, 2 /*ClosedPolygon*/, 0, 2.0, 0.25)
+	inflated, err := InflatePaths64(square, 2.0, 3 /*JoinMiter*/, 0 /*EndPolygon*/, 2.0, 0.25)
 	if err != nil {
 		t.Fatal(err)
 	}

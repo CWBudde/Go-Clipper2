@@ -126,7 +126,7 @@ func TestReverse64(t *testing.T) {
 func TestInflatePaths64(t *testing.T) {
 	square := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
 
-	result, err := InflatePaths64(square, 1.0, Round, ClosedPolygon)
+	result, err := InflatePaths64(square, 1.0, JoinRound, EndPolygon)
 	if err == ErrNotImplemented {
 		t.Skip("InflatePaths64 not yet implemented")
 	}
@@ -540,7 +540,7 @@ func TestInflatePaths64WithOptions(t *testing.T) {
 		ArcTolerance: 0.1,
 	}
 
-	result, err := InflatePaths64(square, 1.0, Miter, ClosedPolygon, options)
+	result, err := InflatePaths64(square, 1.0, JoinMiter, EndPolygon, options)
 	if err == ErrNotImplemented {
 		t.Skip("InflatePaths64 not yet implemented")
 	}

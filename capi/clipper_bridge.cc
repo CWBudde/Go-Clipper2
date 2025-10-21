@@ -93,20 +93,22 @@ static ClipType toCT(c_cliptype ct) {
 
 static JoinType toJT(c_jointype jt) {
   switch (jt) {
+    case C_JOIN_SQUARE: return JoinType::Square;
+    case C_JOIN_BEVEL:  return JoinType::Bevel;
     case C_JOIN_ROUND:  return JoinType::Round;
     case C_JOIN_MITER:  return JoinType::Miter;
-    case C_JOIN_SQUARE:
     default:            return JoinType::Square;
   }
 }
 
 static EndType toET(c_endtype et) {
   switch (et) {
+    case C_END_POLYGON: return EndType::Polygon;
+    case C_END_JOINED:  return EndType::Joined;
+    case C_END_BUTT:    return EndType::Butt;
     case C_END_SQUARE:  return EndType::Square;
     case C_END_ROUND:   return EndType::Round;
-    case C_END_JOINED:  return EndType::Joined; // open-joined
-    case C_END_BUTT:
-    default:            return EndType::Butt;
+    default:            return EndType::Polygon;
   }
 }
 

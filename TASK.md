@@ -161,33 +161,208 @@ Create a **production-ready pure Go port** of the Clipper2 polygon clipping libr
 
 **Goal: Complete polygon offsetting with all join and end types**
 
-### Tasks
+**Strategy: Incremental implementation by join/end type complexity for risk mitigation**
 
-- [ ] Implement core offsetting algorithm (expansion/contraction)
-- [ ] Add all join types:
-  - [ ] Round joins with arc approximation
-  - [ ] Miter joins with miter limit
-  - [ ] Square joins for sharp corners
-- [ ] Support all end types:
-  - [ ] ClosedPolygon and ClosedLine
-  - [ ] OpenSquare, OpenRound, OpenButt end caps
-- [ ] Implement precision controls:
-  - [ ] MiterLimit for spike length control
-  - [ ] ArcTolerance for round approximation quality
-- [ ] Validate against oracle:
-  - [ ] Various deltas (positive and negative)
-  - [ ] All join/end type combinations
-  - [ ] Self-intersecting inputs
+Reference: `third_party/clipper2/CPP/Clipper2Lib/src/clipper.offset.cpp` (~662 lines)
 
-**Prerequisites:**
+### Phase 1: Infrastructure + Bevel Joins + Closed Polygons
 
-- Check reference implementation in `third_party/clipper2/CPP/Clipper2Lib/src/clipper.offset.cpp`
+**Goal:** Core infrastructure and simplest join type working
+
+**Tasks:**
+
+- [ ] Create `port/offset.go` with ClipperOffset type
+- [ ] Create `port/offset_internal.go` for helper functions
+- [ ] Add JoinType and EndType enums to `port/types.go`
+- [ ] Implement core infrastructure:
+  - [ ] offsetGroup type
+  - [ ] AddPath/AddPaths methods
+  - [ ] BuildNormals - calculate perpendicular unit vectors
+  - [ ] Helper functions: GetUnitNormal, Hypot, GetPerpendic
+  - [ ] GetLowestClosedPathInfo - orientation detection
+- [ ] Implement DoBevel (simplest join - just 2 offset points)
+- [ ] Implement OffsetPoint orchestrator (Phase 1: only Bevel support)
+- [ ] Implement OffsetPolygon (closed path offsetting)
+- [ ] Implement ExecuteInternal with Union cleanup
+- [ ] Implement public Execute method
+- [ ] Add oracle tests: simple polygon expansion/contraction with Bevel joins
+- [ ] Validate against oracle (target: 100% match)
+
+**Validation Focus:**
+
+- Simple square/rectangle offsetting
+- Positive deltas (expansion)
+- Negative deltas (contraction)
+- Concave and convex polygons
 
 **Done When:**
 
-- Parity with oracle across comprehensive test matrix
-- All join/end types working correctly
-- Miter/arc controls functioning properly
+- Bevel joins working perfectly on closed polygons
+- Oracle validation passing at 100%
+- ~150-200 lines implemented
+
+### Phase 2: Add Miter Joins
+
+**Goal:** Add miter joins with miter limit control
+
+**Tasks:**
+
+- [ ] Add miter_limit field to ClipperOffset
+- [ ] Add temp_lim calculation in ExecuteInternal
+- [ ] Implement DoMiter:
+  - [ ] Calculate miter point from averaged normals
+  - [ ] Apply group_delta scaling
+- [ ] Update OffsetPoint to handle JoinType::Miter
+- [ ] Add miter limit fallback logic (falls back to Square when exceeded)
+- [ ] Add MiterLimit accessor methods
+- [ ] Add oracle tests: sharp corners with various miter limits
+- [ ] Validate against oracle
+
+**Validation Focus:**
+
+- Acute angles (< 45°)
+- Sharp spikes with miter limits
+- Miter limit exceeded → fallback behavior
+- Star polygons and other sharp-cornered shapes
+
+**Done When:**
+
+- Miter joins working correctly
+- MiterLimit parameter controlling spike length
+- Oracle validation passing at 100%
+- ~50-80 lines added
+
+### Phase 3: Add Square Joins
+
+**Goal:** Add square joins with intersection calculations
+
+**Tasks:**
+
+- [ ] Implement DoSquare:
+  - [ ] Calculate average unit vector
+  - [ ] Offset original vertex along unit vector
+  - [ ] Calculate perpendicular vertices
+  - [ ] Find segment intersection points
+  - [ ] Handle reflection for symmetry
+- [ ] Add GetAvgUnitVector helper
+- [ ] Add segment intersection helper (may already exist in geometry.go)
+- [ ] Update OffsetPoint to handle JoinType::Square
+- [ ] Add oracle tests: square corner behaviors
+- [ ] Validate against oracle
+
+**Validation Focus:**
+
+- 90-degree corners
+- Various angles
+- Edge cases where square joins create long extensions
+
+**Done When:**
+
+- Square joins working correctly
+- Oracle validation passing at 100%
+- ~80-100 lines added
+
+### Phase 4: Add Round Joins
+
+**Goal:** Add round joins with arc approximation and arc tolerance
+
+**Tasks:**
+
+- [ ] Add arc_tolerance field to ClipperOffset
+- [ ] Add steps_per_rad, step_sin, step_cos fields
+- [ ] Implement DoRound:
+  - [ ] Calculate steps needed for arc approximation
+  - [ ] Generate arc points using rotation matrix
+  - [ ] Handle dynamic arc tolerance calculation
+- [ ] Add arc calculation logic to ExecuteInternal
+- [ ] Add ArcTolerance accessor methods
+- [ ] Update OffsetPoint to handle JoinType::Round
+- [ ] Add oracle tests: smooth curves with various arc tolerances
+- [ ] Validate against oracle
+
+**Validation Focus:**
+
+- Smooth rounded corners
+- Arc tolerance effects (coarse vs fine approximation)
+- Large vs small offset deltas
+- Circles and ellipses
+
+**Done When:**
+
+- Round joins working correctly
+- ArcTolerance parameter controlling curve quality
+- Oracle validation passing at 100%
+- ~80-100 lines added
+
+### Phase 5: Add Open Path Support
+
+**Goal:** Support open paths with all end cap types
+
+**Tasks:**
+
+- [ ] Implement OffsetOpenPath:
+  - [ ] Start cap handling (Butt, Square, Round)
+  - [ ] Forward edge offsetting
+  - [ ] Reverse normals for return path
+  - [ ] End cap handling
+  - [ ] Backward edge offsetting
+- [ ] Implement OffsetOpenJoined:
+  - [ ] Offset as polygon
+  - [ ] Reverse path
+  - [ ] Rebuild and negate normals
+  - [ ] Offset reversed path
+- [ ] Update DoGroupOffset to route to correct handler based on EndType
+- [ ] Handle single-point paths (circle/square generation)
+- [ ] Handle two-point paths with Joined end type
+- [ ] Add oracle tests: line offsetting with all end cap combinations
+- [ ] Validate against oracle
+
+**Validation Focus:**
+
+- Open line segments
+- All end cap types: Butt, Square, Round
+- Joined open paths
+- Single-point and two-point edge cases
+
+**Done When:**
+
+- All end types working correctly
+- Open path offsetting matches oracle
+- Single/two-point edge cases handled
+- Oracle validation passing at 100%
+- ~120-150 lines added
+
+### Phase 6: Polish and Edge Cases
+
+**Goal:** Handle remaining edge cases and optimize
+
+**Tasks:**
+
+- [ ] Add preserve_collinear support
+- [ ] Add reverse_solution support
+- [ ] Handle degenerate inputs gracefully
+- [ ] Add comprehensive test suite:
+  - [ ] All join type × end type combinations
+  - [ ] Self-intersecting inputs
+  - [ ] Very large and very small deltas
+  - [ ] Edge cases from upstream test suite
+- [ ] Performance profiling and optimization
+- [ ] Documentation and examples
+
+**Done When:**
+
+- Feature parity with C++ Clipper2 offset implementation
+- All oracle tests passing at 100%
+- Edge cases handled robustly
+- Ready for production use
+
+### Overall M4 Completion Criteria
+
+- ✅ All 4 join types working: Bevel, Miter, Square, Round
+- ✅ All 5 end types working: Polygon, Joined, Butt, Square, Round
+- ✅ Precision controls: MiterLimit, ArcTolerance
+- ✅ 100% parity with oracle across comprehensive test matrix
+- ✅ ~450-600 lines of well-tested Go code
 
 ---
 
