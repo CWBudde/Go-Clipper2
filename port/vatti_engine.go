@@ -171,10 +171,10 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 		debugLog("After inserting minima:")
 		debugLogAEL(ve.activeEdges)
 
-		// Update edge X positions for current scanline
+		// Phase 4: Update edge X positions for current scanline
 		ve.updateEdgePositions(y)
 
-		// Phase 4: Process intersections and add output points
+		// Phase 5: Process intersections and add output points
 		if !ve.processIntersections(y) {
 			return false
 		}
@@ -182,7 +182,7 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 		debugLog("After processing intersections:")
 		debugLogAEL(ve.activeEdges)
 
-		// Phase 5: Remove edges that have reached their top
+		// Phase 6: Remove edges that have reached their top
 		ve.removeTopEdges(y)
 
 		debugLog("After removing top edges:")
@@ -542,12 +542,17 @@ func (ve *VattiEngine) isContributingEdge(edge *Edge) bool {
 		pftSubject = windCnt != 0
 		pftClip = windCnt2 != 0
 	case Positive:
-		// Positive fill rule: use absolute value for standard polygons
-		// This works for both CW (positive winding) and CCW (negative winding) polygons
+		// Positive fill rule: use absolute value for simple polygons (non-self-intersecting).
+		// This works for both CW (positive winding) and CCW (negative winding) polygon orientations.
 		pftSubject = abs(windCnt) > 0
 		pftClip = abs(windCnt2) > 0
 	case Negative:
-		// Negative fill rule: use absolute value for standard polygons
+		// Negative fill rule: use absolute value for simple polygons (non-self-intersecting).
+		// Note: Both Positive and Negative use the same logic (abs(windCnt) > 0) because they
+		// differ only in their interpretation of "filled" regions, but in the Vatti algorithm's
+		// edge contribution logic, both simply need to check if the winding count is non-zero,
+		// regardless of its sign. The actual difference between Positive/Negative is handled
+		// by the polygon orientation during input processing.
 		pftSubject = abs(windCnt) > 0
 		pftClip = abs(windCnt2) > 0
 	}
@@ -653,7 +658,11 @@ func (ve *VattiEngine) addOutputPoint(edge *Edge, pt Point64) {
 			outPt.Prev = outRec.Pts.Prev
 			outRec.Pts.Prev.Next = outPt
 			outRec.Pts.Prev = outPt
-			// DON'T update outRec.Pts - keep the first point as the start
+			// DON'T update outRec.Pts - keep the first point as the start.
+			// This is critical: outRec.Pts always points to the first point added to the polygon,
+			// ensuring that when we later traverse the circular linked list to build the final path,
+			// we start from the original starting point. Changing outRec.Pts here would break
+			// the correct order and could result in duplicate points or incorrect polygon orientation.
 		}
 	}
 }
