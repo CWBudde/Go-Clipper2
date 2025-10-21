@@ -1,6 +1,9 @@
 # Go Clipper2
 
-> **🚧 Work In Progress:** This is an active port of Clipper2 to pure Go. The **CGO oracle mode is production-ready** (100% functional), but the **pure Go implementation is ~70% complete** with boolean operations currently being debugged. See [TASK.md](TASK.md) for detailed status.
+> **🚧 Work In Progress:** This is an active port of Clipper2 to pure Go. The
+> **CGO oracle mode is production-ready** (100% functional), but the **pure Go
+> implementation is ~70% complete** with boolean operations currently being
+> debugged. See [PLAN.md](PLAN.md) for detailed status.
 
 A high-performance pure Go port of
 [Clipper2](https://github.com/AngusJohnson/Clipper2), the industry-standard
@@ -10,8 +13,10 @@ errors common in computational geometry.
 
 ## 🌟 Features
 
-- **🚀 Pure Go Implementation** (In Progress): Zero C/C++ dependencies for production use
-- **🔧 Dual Architecture**: CGO oracle for development validation and production use (fully working)
+- **🚀 Pure Go Implementation** (In Progress): Zero C/C++ dependencies for
+  production use
+- **🔧 Dual Architecture**: CGO oracle for development validation and production
+  use (fully working)
 - **⚡ Robust Arithmetic**: 64-bit integer coordinates prevent numerical
   instability
 - **🎯 Complete API**: Public API defined and stable
@@ -279,33 +284,36 @@ func RectClip64(rect Path64, paths Paths64) (Paths64, error)  // Fast rectangula
 
 ## 📊 Implementation Status
 
-| Feature               | Pure Go | CGO Oracle | Status                          |
-| --------------------- | ------- | ---------- | ------------------------------- |
-| **Core Utilities**    |         |            |                                 |
-| Area Calculation      | ✅      | ✅         | Complete                        |
-| Orientation Detection | ✅      | ✅         | Complete                        |
-| Path Reversal         | ✅      | ✅         | Complete                        |
-| Rectangle Clipping    | ✅      | ✅         | Complete (fuzz tested)          |
-| **Geometry Kernel**   |         |            |                                 |
-| 128-bit Math          | ✅      | ✅         | Complete (production-ready)     |
-| Segment Intersection  | ✅      | ✅         | Complete (all edge cases)       |
-| Winding Numbers       | ✅      | ✅         | Complete (all fill rules)       |
-| Point-in-Polygon      | ✅      | ✅         | Complete                        |
-| **Boolean Operations** |         |            |                                 |
-| Union64               | 🔧      | ✅         | Implemented (debugging needed)  |
-| Intersect64           | 🔧      | ✅         | Implemented (debugging needed)  |
-| Difference64          | 🔧      | ✅         | Implemented (debugging needed)  |
-| Xor64                 | 🔧      | ✅         | Implemented (debugging needed)  |
-| **Advanced Features** |         |            |                                 |
-| Polygon Offsetting    | ❌      | ✅         | Not started (planned M4)        |
-| Minkowski Sum/Diff    | ❌      | ❌         | Future (M5)                     |
+| Feature                | Pure Go | CGO Oracle | Status                         |
+| ---------------------- | ------- | ---------- | ------------------------------ |
+| **Core Utilities**     |         |            |                                |
+| Area Calculation       | ✅      | ✅         | Complete                       |
+| Orientation Detection  | ✅      | ✅         | Complete                       |
+| Path Reversal          | ✅      | ✅         | Complete                       |
+| Rectangle Clipping     | ✅      | ✅         | Complete (fuzz tested)         |
+| **Geometry Kernel**    |         |            |                                |
+| 128-bit Math           | ✅      | ✅         | Complete (production-ready)    |
+| Segment Intersection   | ✅      | ✅         | Complete (all edge cases)      |
+| Winding Numbers        | ✅      | ✅         | Complete (all fill rules)      |
+| Point-in-Polygon       | ✅      | ✅         | Complete                       |
+| **Boolean Operations** |         |            |                                |
+| Union64                | 🔧      | ✅         | Implemented (debugging needed) |
+| Intersect64            | 🔧      | ✅         | Implemented (debugging needed) |
+| Difference64           | 🔧      | ✅         | Implemented (debugging needed) |
+| Xor64                  | 🔧      | ✅         | Implemented (debugging needed) |
+| **Advanced Features**  |         |            |                                |
+| Polygon Offsetting     | ❌      | ✅         | Not started (planned M4)       |
+| Minkowski Sum/Diff     | ❌      | ❌         | Future (M5)                    |
 
 **Legend:**
+
 - ✅ **Fully Working** - Production ready, all tests passing
 - 🔧 **Debugging** - Algorithm implemented but producing incorrect results
 - ❌ **Not Started** - Planned for future milestones
 
-**Note:** CGO oracle mode (`-tags=clipper_cgo`) is **100% functional** and production-ready. All 11/11 CGO tests passing. Pure Go is ~70% complete with Vatti algorithm implemented but requiring debugging.
+**Note:** CGO oracle mode (`-tags=clipper_cgo`) is **100% functional** and
+production-ready. All 11/11 CGO tests passing. Pure Go is ~70% complete with
+Vatti algorithm implemented but requiring debugging.
 
 ## 🤝 Contributing & Development
 
@@ -389,17 +397,20 @@ set CC=gcc
 **Pure Go Boolean Operations Produce Wrong Results**
 
 The pure Go Vatti algorithm is implemented but has bugs. Current status:
+
 - Tests pass without errors but output doesn't match oracle
 - Use `-tags=clipper_cgo` for correct results until debugging is complete
-- See [TASK.md](TASK.md) M3 section for debugging progress
+- See [PLAN.md](PLAN.md) M3 section for debugging progress
 
 **`ErrNotImplemented`**
 
-Currently only returned by `InflatePaths64` (polygon offsetting) in pure Go mode. Use CGO oracle (`-tags=clipper_cgo`) for full functionality.
+Currently only returned by `InflatePaths64` (polygon offsetting) in pure Go
+mode. Use CGO oracle (`-tags=clipper_cgo`) for full functionality.
 
 **`ErrInvalidInput`**
 
-Check polygon orientation and ensure paths meet minimum vertex requirements (3 for closed paths, 2 for open paths).
+Check polygon orientation and ensure paths meet minimum vertex requirements (3
+for closed paths, 2 for open paths).
 
 **Memory Issues**
 

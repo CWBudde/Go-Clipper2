@@ -1,34 +1,42 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
 ## Project Status and Milestones
 
-This project is **~70% complete** and follows a milestone-driven implementation plan documented in `TASK.md`.
+This project is **~70% complete** and follows a milestone-driven implementation
+plan documented in `PLAN.md`.
 
 ### Current Status (as of 2025-10-21)
 
 **✅ Complete and Working:**
+
 - M0: Foundation (project structure, build system, CI/CD)
 - M1: Rectangle clipping + CGO oracle infrastructure
 - M2: Core geometry kernel (128-bit math, segment intersection, winding numbers)
 - CGO Oracle: **100% functional** - all 11/11 tests passing, production-ready
 
 **🔧 In Progress (M3 - Boolean Operations):**
+
 - Vatti scanline algorithm **implemented** (~600 lines in `vatti_engine.go`)
 - Tests pass but produce **incorrect results** (needs debugging)
 - Algorithm structure exists, debugging needed to match oracle behavior
 
 **❌ Not Started:**
+
 - M4: Polygon offsetting (pure Go)
 - M5: Completeness features
 - M6: Production polish and optimization
 
 ### Key Implementation Notes
 
-- **CGO oracle is production-ready**: Use `-tags=clipper_cgo` for fully functional Clipper2 in Go
-- **Pure Go boolean ops exist but are buggy**: Algorithm implemented but debugging needed
-- **Only `InflatePaths64` returns `ErrNotImplemented`**: All other APIs have implementations (though some are incorrect)
+- **CGO oracle is production-ready**: Use `-tags=clipper_cgo` for fully
+  functional Clipper2 in Go
+- **Pure Go boolean ops exist but are buggy**: Algorithm implemented but
+  debugging needed
+- **Only `InflatePaths64` returns `ErrNotImplemented`**: All other APIs have
+  implementations (though some are incorrect)
 - Always validate against CGO oracle when implementing/debugging
 - Reference C++ implementation is in `third_party/clipper2/CPP/Clipper2Lib/src/`
 
@@ -83,7 +91,8 @@ This is a dual-implementation project with a unique build tag architecture:
 - **`capi/`** - CGO bindings (✅ 100% functional, production-ready)
   - `clipper_cgo.go` - Go↔C bridge functions
   - `clipper_bridge.{h,cc}` - C wrapper for C++ Clipper2 API
-- **`third_party/clipper2/`** - Vendored Clipper2 C++ source (reference implementation)
+- **`third_party/clipper2/`** - Vendored Clipper2 C++ source (reference
+  implementation)
 
 ### Build Tags System
 
@@ -100,10 +109,13 @@ This is a dual-implementation project with a unique build tag architecture:
 ### Development Workflow
 
 1. **Write tests first** in `port/clipper_test.go`
-2. **Validate with oracle**: Tests must pass with `-tags=clipper_cgo` (oracle is ground truth)
-3. **Implement pure Go**: Write/debug algorithm in `port/impl_pure.go` or specialized files
+2. **Validate with oracle**: Tests must pass with `-tags=clipper_cgo` (oracle is
+   ground truth)
+3. **Implement pure Go**: Write/debug algorithm in `port/impl_pure.go` or
+   specialized files
 4. **Validate implementation**: Compare pure Go results against oracle
-5. **Debug discrepancies**: Add logging, compare with C++ reference in `third_party/clipper2/`
+5. **Debug discrepancies**: Add logging, compare with C++ reference in
+   `third_party/clipper2/`
 
 ## API Design Patterns
 
@@ -134,15 +146,19 @@ case err != nil:
 ## Implementation Status
 
 **Pure Go Mode (default build):**
+
 - ✅ **Fully Working**: Area64, IsPositive64, Reverse64, RectClip64
 - ✅ **Complete Infrastructure**: 128-bit math, geometry kernel, all fill rules
-- 🔧 **Debugging Needed**: Union64, Intersect64, Difference64, Xor64 (algorithm exists but produces wrong results)
+- 🔧 **Debugging Needed**: Union64, Intersect64, Difference64, Xor64 (algorithm
+  exists but produces wrong results)
 - ❌ **Not Implemented**: InflatePaths64 (returns `ErrNotImplemented`)
 
 **CGO Oracle Mode (`-tags=clipper_cgo`):**
+
 - ✅ **100% Functional**: All operations work correctly
 - ✅ **Production-Ready**: All 11/11 tests passing
-- ✅ **Full Feature Set**: Boolean ops, offsetting, rectangle clipping, all utilities
+- ✅ **Full Feature Set**: Boolean ops, offsetting, rectangle clipping, all
+  utilities
 
 ## Testing Strategy
 
@@ -154,23 +170,30 @@ case err != nil:
 
 ## Code Quality and Linting
 
-Always run `just lint` before committing code. The project uses golangci-lint with strict rules including gocritic for style enforcement.
+Always run `just lint` before committing code. The project uses golangci-lint
+with strict rules including gocritic for style enforcement.
 
 ### Common Lint Issues to Avoid
 
 **Function Signatures:**
-- Use combined return types when identical: `func name() (a, b Type, err error)` instead of `func name() (a Type, b Type, err error)`
+
+- Use combined return types when identical: `func name() (a, b Type, err error)`
+  instead of `func name() (a Type, b Type, err error)`
 
 **Control Flow:**
+
 - Prefer switch statements over long if-else chains for better readability
 - Eliminate duplicate branch bodies - consolidate identical logic
 
 **Modern Go Syntax:**
+
 - Use new octal literal format `0o12` instead of deprecated `012`
 - Follow modern Go conventions for clarity
 
 **Unused Fields:**
-- During development, prefix unused struct fields with `_` to indicate intentional non-use
+
+- During development, prefix unused struct fields with `_` to indicate
+  intentional non-use
 - Remove or implement unused fields before final implementation
 
 ### Pre-commit Workflow
@@ -183,15 +206,18 @@ just lint-fix      # Attempt automatic fixes where possible
 
 ## Current Debugging Focus (M3)
 
-The Vatti scanline algorithm in `port/vatti_engine.go` is implemented but produces incorrect results. When working on debugging:
+The Vatti scanline algorithm in `port/vatti_engine.go` is implemented but
+produces incorrect results. When working on debugging:
 
 1. **Add detailed logging** to trace algorithm execution
 2. **Start with simple test cases** (2 overlapping rectangles)
-3. **Compare with reference**: `third_party/clipper2/CPP/Clipper2Lib/src/clipper.engine.cpp`
+3. **Compare with reference**:
+   `third_party/clipper2/CPP/Clipper2Lib/src/clipper.engine.cpp`
 4. **Focus on one operation** at a time (start with Intersection)
 5. **Oracle is always right** - if pure Go differs from oracle, pure Go is wrong
 
 Key areas to investigate:
+
 - Local minima detection (vertex.go)
 - Active edge list management (vatti_engine.go)
 - Intersection point calculation
@@ -210,14 +236,17 @@ Key areas to investigate:
 ## Production Use Recommendations
 
 **If you need Clipper2 in Go right now:**
-- Use CGO oracle mode (`-tags=clipper_cgo`) - it's production-ready and fully functional
+
+- Use CGO oracle mode (`-tags=clipper_cgo`) - it's production-ready and fully
+  functional
 - All operations work correctly with native C++ performance
 - Fully tested and validated (11/11 tests passing)
 
 **If you need zero C++ dependencies:**
+
 - Rectangle clipping (`RectClip64`) works perfectly in pure Go
 - Basic utilities (Area64, IsPositive64, Reverse64) fully functional
 - Boolean operations are implemented but need debugging - contributions welcome!
 - Polygon offsetting (`InflatePaths64`) not yet implemented in pure Go
 
-See `TASK.md` for detailed implementation roadmap and current debugging status.
+See `PLAN.md` for detailed implementation roadmap and current debugging status.

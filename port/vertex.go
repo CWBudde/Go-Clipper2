@@ -10,7 +10,7 @@ type VertexFlags uint8
 const (
 	VertexFlagsEmpty     VertexFlags = 0
 	VertexFlagsOpenStart VertexFlags = 1 << iota // Start of an open path
-	VertexFlagsOpenEnd                           // End of an open path  
+	VertexFlagsOpenEnd                           // End of an open path
 	VertexFlagsLocalMax                          // Local maximum vertex
 	VertexFlagsLocalMin                          // Local minimum vertex
 )
@@ -18,10 +18,10 @@ const (
 // Vertex represents a polygon vertex in the Vatti algorithm
 // This is the fundamental building block of the scanline algorithm
 type Vertex struct {
-	Pt    Point64      // The vertex coordinates
-	Next  *Vertex      // Next vertex in the polygon chain
-	Prev  *Vertex      // Previous vertex in the polygon chain
-	Flags VertexFlags  // Vertex flags (local min/max, open start/end, etc.)
+	Pt    Point64     // The vertex coordinates
+	Next  *Vertex     // Next vertex in the polygon chain
+	Prev  *Vertex     // Previous vertex in the polygon chain
+	Flags VertexFlags // Vertex flags (local min/max, open start/end, etc.)
 }
 
 // JoinWith specifies how an edge joins with other edges
@@ -173,7 +173,7 @@ func (v *Vertex) isLocalMinimum() bool {
 	return (v.Flags & VertexFlagsLocalMin) != 0
 }
 
-// isLocalMaximum checks if a vertex is a local maximum  
+// isLocalMaximum checks if a vertex is a local maximum
 func (v *Vertex) isLocalMaximum() bool {
 	return (v.Flags & VertexFlagsLocalMax) != 0
 }
@@ -226,12 +226,12 @@ func getVertexChainLength(startVertex *Vertex) int {
 
 	count := 1
 	current := startVertex.Next
-	
+
 	for current != nil && current != startVertex {
 		count++
 		current = current.Next
 	}
-	
+
 	return count
 }
 
@@ -244,14 +244,14 @@ func validateVertexChain(startVertex *Vertex) bool {
 	// Check for basic integrity
 	current := startVertex
 	visited := make(map[*Vertex]bool)
-	
+
 	for {
 		if visited[current] {
 			// We've seen this vertex before - check if it's the start (valid loop) or internal (invalid)
 			return current == startVertex
 		}
 		visited[current] = true
-		
+
 		// Check bidirectional linking
 		if current.Next != nil && current.Next.Prev != current {
 			return false // Forward/backward link mismatch
@@ -259,12 +259,12 @@ func validateVertexChain(startVertex *Vertex) bool {
 		if current.Prev != nil && current.Prev.Next != current {
 			return false // Backward/forward link mismatch
 		}
-		
+
 		current = current.Next
 		if current == nil || current == startVertex {
 			break
 		}
 	}
-	
+
 	return true
 }

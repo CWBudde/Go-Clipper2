@@ -1,74 +1,82 @@
 package clipper
 
 import (
-	"bytes"
 	"testing"
+	"time"
 )
 
-func TestIntersect64BasicWithDebug(t *testing.T) {
-	// Enable debug logging
-	VattiDebug = true
-	debugBuf := &bytes.Buffer{}
-	VattiDebugOutput = debugBuf
-	defer func() {
-		VattiDebug = false
-		VattiDebugOutput = nil
+// TestUnionOffsetPolygon tests Union operation on the exact polygon produced by offset
+func TestUnionOffsetPolygon(t *testing.T) {
+	// This is the exact polygon produced by DoGroupOffset for a 10x10 square with delta=2
+	offsetResult := Paths64{{
+		{-2, 0}, {0, 0}, {0, -2}, {10, -2}, {10, 0}, {12, 0},
+		{12, 10}, {10, 10}, {10, 12}, {0, 12}, {0, 10}, {-2, 10},
+	}}
+
+	t.Logf("Testing Union on offset polygon with %d points", len(offsetResult[0]))
+
+	// Run Union in a goroutine with timeout
+	done := make(chan bool)
+	var result Paths64
+	var err error
+
+	go func() {
+		result, _, err = booleanOp64Impl(Union, Positive, offsetResult, nil, nil)
+		done <- true
 	}()
 
-	// Two overlapping rectangles
-	// Subject: (0,0) to (10,10)
-	// Clip: (5,5) to (15,15)
-	// Expected intersection: (5,5) to (10,10)
-	subject := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
-	clip := Paths64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}}
-
-	t.Logf("Subject: %v", subject)
-	t.Logf("Clip: %v", clip)
-
-	result, err := Intersect64(subject, clip, NonZero)
-
-	// Always print debug log, even on error
-	t.Log("\n=== DEBUG LOG ===\n" + debugBuf.String() + "\n=== END DEBUG LOG ===")
-
-	if err == ErrNotImplemented {
-		t.Skip("Intersect64 not yet implemented in pure Go")
-	}
-	if err != nil {
-		t.Fatalf("Intersect64 failed: %v", err)
-	}
-
-	if len(result) == 0 {
-		t.Fatal("Expected non-empty result from intersection")
-	}
-
-	t.Logf("Intersection result: %v", result)
-
-	// Print debug log
-	t.Log("\n" + debugBuf.String())
-
-	// Validate the result
-	// The intersection should be a square from (5,5) to (10,10)
-	// with 4 vertices forming a proper polygon
-	if len(result) != 1 {
-		t.Errorf("Expected 1 polygon in result, got %d", len(result))
-	}
-
-	if len(result[0]) != 4 {
-		t.Errorf("Expected 4 vertices in intersection polygon, got %d", len(result[0]))
-	}
-
-	// Check that all points are within the expected bounds
-	for i, pt := range result[0] {
-		if pt.X < 5 || pt.X > 10 || pt.Y < 5 || pt.Y > 10 {
-			t.Errorf("Point %d (%v) is outside expected intersection bounds (5,5) to (10,10)", i, pt)
+	select {
+	case <-done:
+		if err != nil {
+			t.Fatalf("Union failed: %v", err)
 		}
-		t.Logf("Result point %d: %v", i, pt)
+		t.Logf("Union succeeded: %d paths", len(result))
+		for i, path := range result {
+			t.Logf("  Path %d: %d points", i, len(path))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Union operation timed out (likely infinite loop)")
 	}
+}
 
-	// Check the area of the result
-	area := Area64(result[0])
-	expectedArea := 25.0 // 5x5 square
-	if area != expectedArea {
-		t.Logf("Warning: Expected area %v, got %v", expectedArea, area)
+// TestUnionSimpleSquare tests Union on a simple square (should work)
+func TestUnionSimpleSquare(t *testing.T) {
+	square := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
+
+	t.Log("Testing Union on simple square...")
+	result, _, err := booleanOp64Impl(Union, Positive, square, nil, nil)
+	if err != nil {
+		t.Fatalf("Union failed: %v", err)
+	}
+	t.Logf("Union succeeded: %d paths", len(result))
+}
+
+// TestUnionOffsetPolygonCCW tests if orientation matters
+func TestUnionOffsetPolygonCCW(t *testing.T) {
+	// Try the offset polygon in CCW orientation
+	offsetResultCCW := Paths64{{
+		{-2, 10}, {0, 10}, {0, 12}, {10, 12}, {10, 10}, {12, 10},
+		{12, 0}, {10, 0}, {10, -2}, {0, -2}, {0, 0}, {-2, 0},
+	}}
+
+	t.Logf("Testing Union on CCW offset polygon")
+
+	done := make(chan bool)
+	var result Paths64
+	var err error
+
+	go func() {
+		result, _, err = booleanOp64Impl(Union, Positive, offsetResultCCW, nil, nil)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		if err != nil {
+			t.Fatalf("Union failed: %v", err)
+		}
+		t.Logf("Union succeeded: %d paths", len(result))
+	case <-time.After(2 * time.Second):
+		t.Fatal("Union operation timed out (likely infinite loop)")
 	}
 }

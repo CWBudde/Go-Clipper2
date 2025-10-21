@@ -71,3 +71,45 @@ func Reverse64(path Path64) Path64 {
 	}
 	return result
 }
+
+// ReversePaths64 reverses the order of points in each path
+func ReversePaths64(paths Paths64) Paths64 {
+	result := make(Paths64, len(paths))
+	for i, path := range paths {
+		result[i] = Reverse64(path)
+	}
+	return result
+}
+
+// Bounds64 calculates the bounding rectangle of a path
+func Bounds64(path Path64) Rect64 {
+	return bounds64Impl(path)
+}
+
+// BoundsPaths64 calculates the bounding rectangle of multiple paths
+func BoundsPaths64(paths Paths64) Rect64 {
+	return boundsPaths64Impl(paths)
+}
+
+// PointInPolygon64 determines if a point is inside, outside, or on the boundary of a polygon
+func PointInPolygon64(pt Point64, polygon Path64, fillRule FillRule) PolygonLocation {
+	return PointInPolygon(pt, polygon, fillRule)
+}
+
+// SimplifyPath64 simplifies a path by removing points within epsilon distance of the line between neighbors
+// Uses perpendicular distance-based algorithm (Visvalingam-Whyatt inspired)
+func SimplifyPath64(path Path64, epsilon float64, isClosedPath bool) Path64 {
+	return simplifyPath64Impl(path, epsilon, isClosedPath)
+}
+
+// SimplifyPaths64 simplifies multiple paths
+func SimplifyPaths64(paths Paths64, epsilon float64, isClosedPath bool) Paths64 {
+	result := make(Paths64, 0, len(paths))
+	for _, path := range paths {
+		simplified := SimplifyPath64(path, epsilon, isClosedPath)
+		if len(simplified) > 0 {
+			result = append(result, simplified)
+		}
+	}
+	return result
+}

@@ -68,7 +68,7 @@ func TestIntersectTriangles(t *testing.T) {
 func TestIntersectMultipleRegions(t *testing.T) {
 	// Two separate rectangles as subject
 	subject := Paths64{
-		{{0, 0}, {5, 0}, {5, 5}, {0, 5}},   // Left square
+		{{0, 0}, {5, 0}, {5, 5}, {0, 5}},     // Left square
 		{{10, 0}, {15, 0}, {15, 5}, {10, 5}}, // Right square
 	}
 	// One wide rectangle as clip

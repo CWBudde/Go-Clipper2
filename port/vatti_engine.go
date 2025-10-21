@@ -1289,7 +1289,11 @@ func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 	opBack := opFront.Next
 
 	// Enhanced duplicate checking - check ALL points in the circular list
+	// Add safety counter to prevent infinite loops if circular list is corrupted
 	current := opFront
+	safetyCount := 0
+	maxPoints := 10000 // Reasonable upper limit for points in a single OutRec
+	logInterval := 100 // Log every N points to track progress
 	for {
 		if current.Pt == pt {
 			debugLog("addOutPt[%s]: DUPLICATE DETECTED! Point (%d,%d) already exists in OutRec #%d (skipping)",
@@ -1297,8 +1301,28 @@ func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 			return current // Return existing point
 		}
 		current = current.Next
+		safetyCount++
+
+		// Log progress periodically
+		if safetyCount%logInterval == 0 {
+			debugLog("addOutPt[%s]: Checked %d points in circular list, current=(%d,%d)",
+				caller, safetyCount, current.Pt.X, current.Pt.Y)
+		}
+
 		if current == opFront {
+			debugLog("addOutPt[%s]: Circular list complete after %d points", caller, safetyCount)
 			break // Completed the circle
+		}
+
+		if safetyCount > maxPoints {
+			debugLog("addOutPt[%s]: ERROR - circular list check exceeded %d iterations! Circular list may be corrupted. OutRec #%d",
+				caller, maxPoints, outRec.Idx)
+			debugLog("  Checked %d points without completing circle", safetyCount)
+			debugLog("  opFront: %p (%d,%d), current: %p (%d,%d)",
+				opFront, opFront.Pt.X, opFront.Pt.Y, current, current.Pt.X, current.Pt.Y)
+			debugLog("  current.Next: %p, current.Prev: %p", current.Next, current.Prev)
+			// Return new point anyway to avoid infinite loop
+			break
 		}
 	}
 
@@ -1481,11 +1505,19 @@ func IsHorizontal(e *Edge) bool {
 // UpdateEdgeIntoAEL advances an edge to its next vertex
 // C++ line 1742-1791
 func (ve *VattiEngine) UpdateEdgeIntoAEL(e *Edge) {
+	debugLog("UpdateEdgeIntoAEL: Advancing edge from (%d,%d)", e.Top.X, e.Top.Y)
+
 	// Advance edge to next vertex
 	e.Bot = e.Top
 	e.VertexTop = ve.getNextVertex(e)
+	if e.VertexTop == nil {
+		debugLog("  ERROR: getNextVertex returned nil!")
+		return
+	}
 	e.Top = e.VertexTop.Pt
 	e.CurrX = e.Bot.X
+
+	debugLog("  New Top: (%d,%d), IsHorizontal: %v", e.Top.X, e.Top.Y, IsHorizontal(e))
 
 	// Recalculate slope (Dx)
 	if e.Top.Y != e.Bot.Y {
@@ -1501,11 +1533,14 @@ func (ve *VattiEngine) UpdateEdgeIntoAEL(e *Edge) {
 
 	// If edge is hot (contributing), add the bottom point
 	if e.OutRec != nil {
+		debugLog("  Adding output point at (%d,%d)", e.Bot.X, e.Bot.Y)
 		ve.addOutPt(e, e.Bot, "UpdateEdgeIntoAEL")
+		debugLog("  Output point added successfully")
 	}
 
 	// Note: We don't add horizontal edges to scanline set here
 	// They will be processed by DoHorizontal
+	debugLog("  UpdateEdgeIntoAEL complete")
 }
 
 // getNextVertex returns the next vertex in the chain
@@ -1552,132 +1587,186 @@ func (ve *VattiEngine) ResetHorzDirection(horz *Edge, maxPair *Edge) (horzLeft, 
 
 // DoHorizontal processes a horizontal edge
 // C++ line 2537-2708
+// CRITICAL: Must process consecutive horizontal segments in a single call via while(true) loop
+// DO NOT push back to horizontal queue - this causes infinite loops
 func (ve *VattiEngine) DoHorizontal(horz *Edge) {
 	debugLog("DoHorizontal: Processing horizontal edge at Y=%d from X=%d to X=%d",
 		horz.Bot.Y, horz.Bot.X, horz.Top.X)
 
-	// Find the maximum pair edge (where this horizontal edge terminates)
-	// Look for an edge that shares the same Top point (not just same vertex object)
-	var maxPair *Edge
+	y := horz.Bot.Y
 
-	// Search for an edge that ends at the same point as this horizontal edge's top
-	if horz.IsLeftBound {
-		// Left bound - look to the right for paired edge
-		e := horz.NextInAEL
-		for e != nil {
-			// Check if this edge's top matches our horizontal's top
-			if e.CurrX == horz.Top.X && e.Top.Y == horz.Top.Y && e.Top == horz.Top {
-				maxPair = e
-				break
-			}
-			// Stop searching beyond the horizontal bounds
-			if e.CurrX > horz.Top.X {
-				break
-			}
-			e = e.NextInAEL
-		}
-	} else {
-		// Right bound - look to the left for paired edge
-		e := horz.PrevInAEL
-		for e != nil {
-			// Check if this edge's top matches our horizontal's top
-			if e.CurrX == horz.Top.X && e.Top.Y == horz.Top.Y && e.Top == horz.Top {
-				maxPair = e
-				break
-			}
-			// Stop searching beyond the horizontal bounds
-			if e.CurrX < horz.Top.X {
-				break
-			}
-			e = e.PrevInAEL
-		}
-	}
+	// Find vertex_max - the vertex where this horizontal terminates
+	// For now, use VertexTop as the maxima vertex (simplified from C++)
+	vertexMax := horz.VertexTop
 
-	// Also check if vertex is marked as local maximum
-	if maxPair == nil && horz.VertexTop != nil && horz.VertexTop.isLocalMaximum() {
-		debugLog("  VertexTop is marked as LocalMax but no paired edge found in AEL")
-	}
-
-	// Set up direction markers (left and right X bounds)
-	horzLeft, horzRight := ve.ResetHorzDirection(horz, maxPair)
-
-	debugLog("  Horizontal bounds: left=%d, right=%d, maxPair=%v",
-		horzLeft, horzRight, maxPair != nil)
-
+	// Add initial output point if this edge is hot
 	isHot := (horz.OutRec != nil)
+	if isHot {
+		pt := Point64{horz.CurrX, y}
+		ve.addOutPt(horz, pt, "DoHorizontal:start")
+	}
 
-	// Process edges that intersect this horizontal edge
-	// We need to add intermediate points for all contributing edges we cross
-	e := horz.NextInAEL
-	for e != nil {
-		// Stop when we reach the maximum pair or go beyond the horizontal bounds
-		if e == maxPair {
+	// Outer loop: process consecutive horizontal segments
+	// C++ line 2581: while (true) // loop through consec. horizontal edges
+	loopCount := 0
+	for {
+		loopCount++
+		debugLog("  DoHorizontal: Loop iteration %d, horz at (%d,%d)->(%d,%d)",
+			loopCount, horz.Bot.X, horz.Bot.Y, horz.Top.X, horz.Top.Y)
+
+		if loopCount > 100 {
+			debugLog("  ERROR: DoHorizontal loop count exceeded 100, breaking to prevent infinite loop")
 			break
 		}
-		if e.CurrX > horzRight {
-			break
+
+		// Find the maximum pair edge (where this horizontal edge terminates)
+		var maxPair *Edge
+
+		// Search for an edge that ends at the same vertex as this horizontal
+		if horz.IsLeftBound {
+			// Left bound - look to the right for paired edge
+			e := horz.NextInAEL
+			for e != nil {
+				if e.VertexTop == vertexMax {
+					maxPair = e
+					break
+				}
+				if e.CurrX > horz.Top.X {
+					break
+				}
+				e = e.NextInAEL
+			}
+		} else {
+			// Right bound - look to the left for paired edge
+			e := horz.PrevInAEL
+			for e != nil {
+				if e.VertexTop == vertexMax {
+					maxPair = e
+					break
+				}
+				if e.CurrX < horz.Top.X {
+					break
+				}
+				e = e.PrevInAEL
+			}
 		}
 
-		// If both edges are hot (contributing), add intermediate point
-		if isHot && e.OutRec != nil {
-			pt := Point64{e.CurrX, horz.Bot.Y}
+		// Set up direction markers
+		horzLeft, horzRight := ve.ResetHorzDirection(horz, maxPair)
+		isLeftToRight := horz.Dx > 0
 
-			// Add point to horizontal edge's OutRec
-			if horz.OutRec != nil {
-				ve.addOutPt(horz, pt, "DoHorizontal:intermediate")
+		debugLog("  Horizontal bounds: left=%d, right=%d, isLeftToRight=%v, maxPair=%v",
+			horzLeft, horzRight, isLeftToRight, maxPair != nil)
+
+		// Inner loop: process edges that intersect this horizontal segment
+		// C++ line 2587: while (e)
+		var e *Edge
+		if isLeftToRight {
+			e = horz.NextInAEL
+		} else {
+			e = horz.PrevInAEL
+		}
+
+		for e != nil {
+			// C++ line 2589: if (e->vertex_top == vertex_max)
+			if e.VertexTop == vertexMax {
+				// Found the maxima pair - add local maximum and delete both edges
+				debugLog("  Found vertex_max pair, creating local maximum")
+
+				if isHot {
+					// Advance horz to vertex_max if needed
+					for horz.VertexTop != vertexMax {
+						ve.addOutPt(horz, horz.Top, "DoHorizontal:advance_to_max")
+						ve.UpdateEdgeIntoAEL(horz)
+					}
+
+					// Add local maximum poly
+					if isLeftToRight {
+						ve.addLocalMaxPoly(horz, e, horz.Top)
+					} else {
+						ve.addLocalMaxPoly(e, horz, horz.Top)
+					}
+				}
+
+				// Delete both edges from AEL
+				ve.removeEdgeFromAEL(e)
+				ve.removeEdgeFromAEL(horz)
+				return
 			}
 
-			debugLog("  Added intermediate point at (%d,%d) to OutRec #%d",
-				pt.X, pt.Y, horz.OutRec.Idx)
+			// Check if we should stop processing edges
+			// C++ line 2616: if (vertex_max != horz.vertex_top || IsOpenEnd(horz))
+			if vertexMax != horz.VertexTop {
+				// Stop when beyond horizontal bounds
+				// C++ line 2619: if ((is_left_to_right && e->curr_x > horz_right) || ...
+				if (isLeftToRight && e.CurrX > horzRight) || (!isLeftToRight && e.CurrX < horzLeft) {
+					break
+				}
+
+				// Additional slope checks would go here (C++ lines 2622-2643)
+				// Simplified for now - just check if at boundary
+				if e.CurrX == horz.Top.X && !IsHorizontal(e) {
+					nextVertex := ve.getNextVertex(horz)
+					if nextVertex != nil {
+						pt := nextVertex.Pt
+						// Check slope comparison (simplified)
+						if isLeftToRight {
+							if ve.topX(e, pt.Y) >= pt.X {
+								break
+							}
+						} else {
+							if ve.topX(e, pt.Y) <= pt.X {
+								break
+							}
+						}
+					}
+				}
+			}
+
+			// Intersect edges
+			// C++ lines 2646-2662
+			pt := Point64{e.CurrX, y}
+			if isLeftToRight {
+				ve.intersectEdges(horz, e, pt)
+				ve.swapPositionsInAEL(horz, e)
+				horz.CurrX = e.CurrX
+				e = horz.NextInAEL
+			} else {
+				ve.intersectEdges(e, horz, pt)
+				ve.swapPositionsInAEL(e, horz)
+				horz.CurrX = e.CurrX
+				e = horz.PrevInAEL
+			}
 		}
 
-		e = e.NextInAEL
-	}
-
-	// Handle the end of the horizontal edge
-	if maxPair != nil {
-		// This horizontal edge ends at a local maximum
-		debugLog("  Horizontal edge ends at local maximum")
-
-		if isHot {
-			// Add the final point at the maximum
-			pt := Point64{horz.Top.X, horz.Top.Y}
-			ve.addLocalMaxPoly(horz, maxPair, pt)
-		}
-
-		// Remove the maximum pair from AEL if it has reached its top
-		if maxPair.Top.Y == horz.Top.Y && !IsHorizontal(maxPair) {
-			ve.removeEdgeFromAEL(maxPair)
-		}
-	} else {
-		// Horizontal edge continues to next vertex
-		debugLog("  Horizontal edge continues (no maximum pair)")
-
-		if isHot {
-			pt := Point64{horz.Top.X, horz.Top.Y}
-			ve.addOutPt(horz, pt, "DoHorizontal:end")
-		}
-	}
-
-	// Check if the edge continues beyond this horizontal segment
-	if !IsHorizontal(horz) {
-		// Edge has become non-horizontal after advancing
-		// This shouldn't happen in DoHorizontal since we're processing an already-horizontal edge
-		// But we keep this check for safety
-		return
-	}
-
-	// If the horizontal edge needs to continue to the next vertex, update it
-	if maxPair == nil && horz.Top.Y == horz.Bot.Y {
-		// Try to advance to next vertex
+		// Check if finished with consecutive horizontals
+		// C++ line 2687: else if (NextVertex(horz)->pt.y != horz.top.y)
 		nextVertex := ve.getNextVertex(horz)
-		if nextVertex != nil && nextVertex.Pt.Y == horz.Top.Y {
-			// Next vertex is also at the same Y - another horizontal segment
-			ve.UpdateEdgeIntoAEL(horz)
-			if IsHorizontal(horz) {
-				// Push back to horizontal queue for further processing
-				ve.PushHorz(horz)
-			}
+		// CRITICAL: Check if next segment is at the SAME Y level as the current horizontal
+		// We must compare against the original Y (from horz.Bot.Y at start), not horz.Top.Y which changes
+		if nextVertex == nil || nextVertex.Pt.Y != y {
+			// No more consecutive horizontals at this Y level
+			debugLog("  Breaking: nextVertex.Y=%d != horizontal Y=%d", nextVertex.Pt.Y, y)
+			break
 		}
+
+		// Still more horizontals in bound to process
+		// C++ lines 2691-2696
+		if isHot {
+			ve.addOutPt(horz, horz.Top, "DoHorizontal:continue")
+		}
+		ve.UpdateEdgeIntoAEL(horz)
+
+		// Continue loop with updated horizontal edge
+		// DO NOT push to queue - we handle it in this loop
 	}
+
+	// End of intermediate horizontal
+	// C++ lines 2699-2705
+	if isHot {
+		pt := Point64{horz.Top.X, horz.Top.Y}
+		ve.addOutPt(horz, pt, "DoHorizontal:final")
+	}
+
+	ve.UpdateEdgeIntoAEL(horz)
 }

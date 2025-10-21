@@ -1,19 +1,15 @@
 package clipper
 
 import (
-	"bytes"
 	"testing"
 )
 
 // TestUnion64BasicDebug tests union with debug output
 func TestUnion64BasicDebug(t *testing.T) {
-	// Enable debug logging
+	// Enable debug logging - write to stdout directly to see logs before timeout
 	VattiDebug = true
-	debugBuf := &bytes.Buffer{}
-	VattiDebugOutput = debugBuf
 	defer func() {
 		VattiDebug = false
-		VattiDebugOutput = nil
 	}()
 
 	// Two overlapping rectangles
@@ -24,9 +20,6 @@ func TestUnion64BasicDebug(t *testing.T) {
 	t.Logf("Clip: %v", clip)
 
 	result, err := Union64(subject, clip, NonZero)
-
-	// Always print debug log
-	t.Log("\n=== DEBUG LOG ===\n" + debugBuf.String() + "\n=== END DEBUG LOG ===")
 
 	if err != nil {
 		t.Fatalf("Union64 failed: %v", err)

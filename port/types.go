@@ -18,6 +18,63 @@ type Path64 []Point64
 // Paths64 represents a collection of paths
 type Paths64 []Path64
 
+// Rect64 represents a rectangle with 64-bit integer coordinates
+// Matches Clipper2 C++ Rect<int64_t> structure
+type Rect64 struct {
+	Left, Top, Right, Bottom int64
+}
+
+// Width returns the width of the rectangle
+func (r Rect64) Width() int64 {
+	return r.Right - r.Left
+}
+
+// Height returns the height of the rectangle
+func (r Rect64) Height() int64 {
+	return r.Bottom - r.Top
+}
+
+// MidPoint returns the center point of the rectangle
+func (r Rect64) MidPoint() Point64 {
+	return Point64{
+		X: (r.Left + r.Right) / 2,
+		Y: (r.Top + r.Bottom) / 2,
+	}
+}
+
+// AsPath converts a rectangle to a path (4 points in counter-clockwise order)
+// Reference: clipper.core.h Rect::AsPath
+func (r Rect64) AsPath() Path64 {
+	return Path64{
+		{X: r.Left, Y: r.Top},
+		{X: r.Right, Y: r.Top},
+		{X: r.Right, Y: r.Bottom},
+		{X: r.Left, Y: r.Bottom},
+	}
+}
+
+// Contains checks if a point is inside the rectangle (exclusive of boundaries)
+func (r Rect64) Contains(pt Point64) bool {
+	return pt.X > r.Left && pt.X < r.Right && pt.Y > r.Top && pt.Y < r.Bottom
+}
+
+// ContainsRect checks if another rectangle is fully contained within this rectangle
+func (r Rect64) ContainsRect(other Rect64) bool {
+	return other.Left >= r.Left && other.Right <= r.Right &&
+		other.Top >= r.Top && other.Bottom <= r.Bottom
+}
+
+// IsEmpty returns true if the rectangle has zero or negative area
+func (r Rect64) IsEmpty() bool {
+	return r.Bottom <= r.Top || r.Right <= r.Left
+}
+
+// Intersects checks if this rectangle intersects with another rectangle
+func (r Rect64) Intersects(other Rect64) bool {
+	return max64(r.Left, other.Left) <= min64(r.Right, other.Right) &&
+		max64(r.Top, other.Top) <= min64(r.Bottom, other.Bottom)
+}
+
 // ClipType specifies the type of boolean operation
 type ClipType uint8
 
@@ -81,27 +138,27 @@ const (
 
 // Edge represents a polygon edge in the active edge list (based on Clipper2's Active struct)
 type Edge struct {
-	Bot         Point64      // bottom point of the edge
-	Top         Point64      // top point of the edge
-	CurrX       int64        // current X position (updated at every new scanline)
-	Dx          float64      // delta X per unit Y (horizontal slope)
-	WindDx      int          // +1 or -1 depending on winding direction
-	WindCount   int          // accumulated winding count
-	WindCount2  int          // accumulated winding count for clip polygons
-	OutRec      *OutRec      // output record this edge contributes to
-	
+	Bot        Point64 // bottom point of the edge
+	Top        Point64 // top point of the edge
+	CurrX      int64   // current X position (updated at every new scanline)
+	Dx         float64 // delta X per unit Y (horizontal slope)
+	WindDx     int     // +1 or -1 depending on winding direction
+	WindCount  int     // accumulated winding count
+	WindCount2 int     // accumulated winding count for clip polygons
+	OutRec     *OutRec // output record this edge contributes to
+
 	// Active Edge List (AEL) - Vatti's AET (active edge table)
 	// Linked list of all edges (from left to right) that are present
 	// (or 'active') within the current scanbeam
-	PrevInAEL   *Edge        // previous edge in active edge list
-	NextInAEL   *Edge        // next edge in active edge list
-	
-	// Sorted Edge List (SEL) - Vatti's ST (sorted table)  
+	PrevInAEL *Edge // previous edge in active edge list
+	NextInAEL *Edge // next edge in active edge list
+
+	// Sorted Edge List (SEL) - Vatti's ST (sorted table)
 	// Linked list used when sorting edges into their new positions at the
 	// top of scanbeams, but also (re)used to process horizontals
-	PrevInSEL   *Edge        // previous edge in sorted edge list
-	NextInSEL   *Edge        // next edge in sorted edge list
-	
+	PrevInSEL *Edge // previous edge in sorted edge list
+	NextInSEL *Edge // next edge in sorted edge list
+
 	Jump        *Edge        // jump pointer for efficiency
 	VertexTop   *Vertex      // top vertex of this edge
 	LocalMin    *LocalMinima // local minima this edge belongs to
