@@ -78,37 +78,92 @@ func createVertexFromPath(path Path64, isOpen bool) *Vertex {
 }
 
 // markLocalMinimaAndMaxima identifies and marks local minima and maxima in the vertex chain
+// This mirrors the C++ AddPaths_ function (clipper.engine.cpp:616-707)
 func markLocalMinimaAndMaxima(vertices []*Vertex, isOpen bool) {
-	if len(vertices) < 3 {
-		return // Cannot have local min/max with less than 3 vertices
+	if len(vertices) < 2 {
+		return
 	}
 
+	n := len(vertices)
+	v0 := vertices[0]
+
+	debugLog("markLocalMinimaAndMaxima: %d vertices, isOpen=%v, v0=%v", n, isOpen, v0.Pt)
 	for i, v := range vertices {
-		var prevV, nextV *Vertex
+		debugLog("  Vertex[%d]: %v", i, v.Pt)
+	}
 
-		if isOpen {
-			// For open paths, don't check first and last vertices as min/max
-			if i == 0 || i == len(vertices)-1 {
-				continue
-			}
-			prevV = vertices[i-1]
-			nextV = vertices[i+1]
+	// Determine initial direction (going_up)
+	// For closed paths, skip over horizontal edges to find true direction
+	var goingUp bool
+	if isOpen {
+		// For open paths, mark start vertex
+		curr := vertices[1]
+		idx := 1
+		// Skip horizontal edges at start (C++ line 657-658)
+		for idx < n && curr.Pt.Y == v0.Pt.Y {
+			curr = vertices[idx]
+			idx++
+		}
+		if idx >= n {
+			return // Completely flat open path
+		}
+		goingUp = curr.Pt.Y <= v0.Pt.Y
+		if goingUp {
+			v0.Flags |= VertexFlagsOpenStart | VertexFlagsLocalMin
 		} else {
-			// For closed paths, wrap around
-			prevV = vertices[(i-1+len(vertices))%len(vertices)]
-			nextV = vertices[(i+1)%len(vertices)]
+			v0.Flags |= VertexFlagsOpenStart | VertexFlagsLocalMax
 		}
+	} else {
+		// For closed paths (C++ line 670-677)
+		prevV := vertices[n-1]
+		prevIdx := n - 1
+		// Skip over horizontal edges going backwards
+		for prevIdx > 0 && prevV.Pt.Y == v0.Pt.Y {
+			prevIdx--
+			prevV = vertices[prevIdx]
+		}
+		if prevV.Pt.Y == v0.Pt.Y {
+			return // Completely flat closed path - skip
+		}
+		goingUp = prevV.Pt.Y > v0.Pt.Y
+	}
 
-		// Check for local minimum - Y is smaller than OR equal to both neighbors
-		// but at least one neighbor has a larger Y
-		if v.Pt.Y <= prevV.Pt.Y && v.Pt.Y <= nextV.Pt.Y && (prevV.Pt.Y > v.Pt.Y || nextV.Pt.Y > v.Pt.Y) {
-			v.Flags |= VertexFlagsLocalMin
+	goingUp0 := goingUp
+	debugLog("  Initial goingUp=%v, goingUp0=%v", goingUp, goingUp0)
+
+	// Traverse vertices and mark local minima/maxima (C++ line 681-693)
+	for i := 1; i < n; i++ {
+		curr := vertices[i]
+		prev := vertices[i-1]
+
+		if curr.Pt.Y > prev.Pt.Y && goingUp {
+			// Direction change from up to down - mark local maximum
+			debugLog("  Vertex[%d] %v: LocalMax (was going up, now going down)", i-1, prev.Pt)
+			prev.Flags |= VertexFlagsLocalMax
+			goingUp = false
+		} else if curr.Pt.Y < prev.Pt.Y && !goingUp {
+			// Direction change from down to up - mark local minimum
+			debugLog("  Vertex[%d] %v: LocalMin (was going down, now going up)", i-1, prev.Pt)
+			prev.Flags |= VertexFlagsLocalMin
+			goingUp = true
 		}
-		
-		// Check for local maximum - Y is larger than OR equal to both neighbors  
-		// but at least one neighbor has a smaller Y
-		if v.Pt.Y >= prevV.Pt.Y && v.Pt.Y >= nextV.Pt.Y && (prevV.Pt.Y < v.Pt.Y || nextV.Pt.Y < v.Pt.Y) {
-			v.Flags |= VertexFlagsLocalMax
+	}
+
+	// Handle last vertex for open/closed paths (C++ line 695-707)
+	lastV := vertices[n-1]
+	if isOpen {
+		lastV.Flags |= VertexFlagsOpenEnd
+		if goingUp {
+			lastV.Flags |= VertexFlagsLocalMax
+		} else {
+			lastV.Flags |= VertexFlagsLocalMin
+		}
+	} else if goingUp != goingUp0 {
+		// Closed path - check if last vertex is min or max
+		if goingUp0 {
+			lastV.Flags |= VertexFlagsLocalMin
+		} else {
+			lastV.Flags |= VertexFlagsLocalMax
 		}
 	}
 }

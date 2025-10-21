@@ -181,6 +181,18 @@ func CrossProduct128(p1, p2, p3 Point64) Int128 {
 	return term1.Sub(term2)
 }
 
+// CrossProductSign returns the sign of the cross product
+// Returns: -1 if negative, 0 if zero, +1 if positive
+func CrossProductSign(p1, p2, p3 Point64) int {
+	cp := CrossProduct128(p1, p2, p3)
+	if cp.IsNegative() {
+		return -1
+	} else if cp.IsZero() {
+		return 0
+	}
+	return 1
+}
+
 // Area128 calculates the signed area of a polygon using 128-bit precision
 func Area128(path Path64) Int128 {
 	if len(path) < 3 {

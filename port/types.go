@@ -106,6 +106,14 @@ type Edge struct {
 	JoinWith    JoinWith     // join specification
 }
 
+// IntersectNode represents an edge intersection that needs to be processed
+// Corresponds to C++ IntersectNode (clipper.engine.h line 139)
+type IntersectNode struct {
+	Edge1 *Edge   // first edge in the intersection
+	Edge2 *Edge   // second edge in the intersection
+	Pt    Point64 // intersection point
+}
+
 // LocalMinima represents a local minimum point where edges start (aligned with Clipper2)
 type LocalMinima struct {
 	Vertex   *Vertex      // the vertex representing this local minimum
@@ -116,12 +124,14 @@ type LocalMinima struct {
 
 // OutRec represents an output polygon record
 type OutRec struct {
-	Idx      int     // index in the output record list
-	Owner    *OutRec // parent polygon for holes
-	State    OutRecState
-	Pts      *OutPt    // linked list of output points
-	BottomPt *OutPt    // bottommost point
-	PolyPath *PolyPath // hierarchical path structure
+	Idx       int     // index in the output record list
+	Owner     *OutRec // parent polygon for holes
+	FrontEdge *Edge   // front edge (for tracking which side adds to front of list)
+	BackEdge  *Edge   // back edge (for tracking which side adds to back of list)
+	State     OutRecState
+	Pts       *OutPt    // linked list of output points
+	BottomPt  *OutPt    // bottommost point
+	PolyPath  *PolyPath // hierarchical path structure
 }
 
 // OutRecState represents the state of an output record

@@ -270,3 +270,44 @@ func minMax64(a, b int64) (int64, int64) {
 	}
 	return b, a
 }
+
+// GetSegmentIntersectPt calculates the intersection point of two line segments
+// Returns the intersection point and true if segments intersect, or zero point and false if parallel
+// This is a C++-compatible wrapper around SegmentIntersection
+func GetSegmentIntersectPt(seg1a, seg1b, seg2a, seg2b Point64) (Point64, bool) {
+	pt, intersectType, err := SegmentIntersection(seg1a, seg1b, seg2a, seg2b)
+	if err != nil || intersectType == NoIntersection {
+		return Point64{}, false
+	}
+	return pt, true
+}
+
+// GetClosestPointOnSegment finds the closest point on a line segment to a given point
+// This implements the standard point-to-segment projection algorithm
+func GetClosestPointOnSegment(pt, segA, segB Point64) Point64 {
+	// Vector from segA to segB
+	dx := float64(segB.X - segA.X)
+	dy := float64(segB.Y - segA.Y)
+
+	// If segment is a point, return that point
+	if dx == 0 && dy == 0 {
+		return segA
+	}
+
+	// Calculate projection parameter t (0 ≤ t ≤ 1)
+	// t = dot(pt - segA, segB - segA) / dot(segB - segA, segB - segA)
+	t := (float64(pt.X-segA.X)*dx + float64(pt.Y-segA.Y)*dy) / (dx*dx + dy*dy)
+
+	// Clamp t to [0, 1] to stay within segment
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+
+	// Calculate closest point
+	return Point64{
+		X: segA.X + int64(t*dx+0.5), // Round to nearest
+		Y: segA.Y + int64(t*dy+0.5),
+	}
+}
