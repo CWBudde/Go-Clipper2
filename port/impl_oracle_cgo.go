@@ -2,6 +2,8 @@
 
 package clipper
 
+import "github.com/go-clipper/clipper2/capi"
+
 // convertToCAPI converts port types to capi types
 func pathsToCAPI(paths Paths64) capi.Paths64 {
 	result := make(capi.Paths64, len(paths))

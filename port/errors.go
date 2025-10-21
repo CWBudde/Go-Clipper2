@@ -11,4 +11,7 @@ var (
 
 	// ErrInvalidInput indicates invalid input parameters
 	ErrInvalidInput = errors.New("invalid input parameters")
+
+	// ErrClipperExecution indicates the clipper algorithm failed during execution
+	ErrClipperExecution = errors.New("clipper execution failed")
 )
