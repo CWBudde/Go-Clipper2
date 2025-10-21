@@ -5,37 +5,11 @@ package clipper
 // This file contains the main implementation entry points for the pure Go version
 // Complex algorithm details are organized into separate files for better maintainability
 
-// booleanOp64Impl pure Go implementation - simplified approach for basic cases
-// This implements a basic working version that handles simple rectangles correctly
-// Following the M3 guidance: "Start with simple cases then generalize"
-func booleanOp64Impl(clipType ClipType, _fillRule FillRule, subjects, _subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
-	// Handle empty inputs
-	if len(subjects) == 0 {
-		if clipType == Union || clipType == Xor {
-			return clips, Paths64{}, nil
-		}
-		return Paths64{}, Paths64{}, nil
-	}
-	if len(clips) == 0 {
-		if clipType == Union || clipType == Difference || clipType == Xor {
-			return subjects, Paths64{}, nil
-		}
-		return Paths64{}, Paths64{}, nil
-	}
-
-	// Simple implementation for basic rectangle cases
-	switch clipType {
-	case Union:
-		return simpleUnion(subjects, clips), Paths64{}, nil
-	case Intersection:
-		return simpleIntersection(subjects, clips), Paths64{}, nil
-	case Difference:
-		return simpleDifference(subjects, clips), Paths64{}, nil
-	case Xor:
-		return simpleXor(subjects, clips), Paths64{}, nil
-	default:
-		return nil, nil, ErrInvalidInput
-	}
+// booleanOp64Impl - now using proper Vatti scanline algorithm
+func booleanOp64Impl(clipType ClipType, fillRule FillRule, subjects, subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
+	// Create and execute Vatti engine
+	engine := NewVattiEngine(clipType, fillRule)
+	return engine.ExecuteClipping(subjects, subjectsOpen, clips)
 }
 
 // inflatePathsImpl pure Go implementation (not yet implemented)

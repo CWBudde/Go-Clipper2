@@ -1,5 +1,3 @@
-//go:build !clipper_cgo
-
 package clipper
 
 // This file contains the core type definitions for the Clipper2 polygon operations
@@ -78,29 +76,42 @@ const (
 	PathTypeClip
 )
 
-// Edge represents a polygon edge in the active edge list
+// Edge represents a polygon edge in the active edge list (based on Clipper2's Active struct)
 type Edge struct {
-	Bot        Point64      // bottom point of the edge
-	Top        Point64      // top point of the edge
-	Curr       Point64      // current position during scanline processing
-	Dx         float64      // delta X per unit Y (horizontal slope)
-	WindDelta  int          // +1 or -1 depending on edge direction
-	WindCount  int          // accumulated winding count
-	WindCount2 int          // accumulated winding count for clip polygons
-	OutRec     *OutRec      // output record this edge contributes to
-	Next       *Edge        // next edge in active edge list
-	Prev       *Edge        // previous edge in active edge list
-	NextInLML  *Edge        // next edge in local minima list
-	PathType   PathType     // subject or clip path
-	LocalMin   *LocalMinima // local minima this edge belongs to
+	Bot         Point64      // bottom point of the edge
+	Top         Point64      // top point of the edge
+	CurrX       int64        // current X position (updated at every new scanline)
+	Dx          float64      // delta X per unit Y (horizontal slope)
+	WindDx      int          // +1 or -1 depending on winding direction
+	WindCount   int          // accumulated winding count
+	WindCount2  int          // accumulated winding count for clip polygons
+	OutRec      *OutRec      // output record this edge contributes to
+	
+	// Active Edge List (AEL) - Vatti's AET (active edge table)
+	// Linked list of all edges (from left to right) that are present
+	// (or 'active') within the current scanbeam
+	PrevInAEL   *Edge        // previous edge in active edge list
+	NextInAEL   *Edge        // next edge in active edge list
+	
+	// Sorted Edge List (SEL) - Vatti's ST (sorted table)  
+	// Linked list used when sorting edges into their new positions at the
+	// top of scanbeams, but also (re)used to process horizontals
+	PrevInSEL   *Edge        // previous edge in sorted edge list
+	NextInSEL   *Edge        // next edge in sorted edge list
+	
+	Jump        *Edge        // jump pointer for efficiency
+	VertexTop   *Vertex      // top vertex of this edge
+	LocalMin    *LocalMinima // local minima this edge belongs to
+	IsLeftBound bool         // true if this is a left bound edge
+	JoinWith    JoinWith     // join specification
 }
 
-// LocalMinima represents a local minimum point where edges start
+// LocalMinima represents a local minimum point where edges start (aligned with Clipper2)
 type LocalMinima struct {
-	Y          int64        // Y coordinate of the local minimum
-	LeftBound  *Edge        // leftmost edge starting at this minimum
-	RightBound *Edge        // rightmost edge starting at this minimum
-	Next       *LocalMinima // next local minima (sorted by Y)
+	Vertex   *Vertex      // the vertex representing this local minimum
+	PathType PathType     // subject or clip path type
+	IsOpen   bool         // true if this is an open path
+	Next     *LocalMinima // next local minima (sorted by Y)
 }
 
 // OutRec represents an output polygon record
