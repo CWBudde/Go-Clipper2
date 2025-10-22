@@ -605,6 +605,12 @@ func (co *ClipperOffset) ExecuteInternal(delta float64) (Paths64, error) {
 		fillRule = Positive
 	}
 
+	// TODO(Phase 6): Pass preserve_collinear to Union operation
+	// The C++ implementation calls c.PreserveCollinear(preserve_collinear_) before Execute
+	// This requires extending the Union64 API or using a lower-level interface that supports
+	// preserve_collinear. For now, preserve_collinear is stored but not used in pure Go mode.
+	// In oracle mode (-tags=clipper_cgo), this would need to be passed through the C bridge.
+
 	// Use Union to clean up the offset paths
 	// Use the public API so it routes to oracle when appropriate
 	cleanedSolution, err := Union64(solution, nil, fillRule)
@@ -652,6 +658,29 @@ func (co *ClipperOffset) ArcTolerance() float64 {
 // Values <= 0 will use a default based on offset delta
 func (co *ClipperOffset) SetArcTolerance(tolerance float64) {
 	co.arcTolerance = tolerance
+}
+
+// PreserveCollinear returns the current preserve_collinear setting
+func (co *ClipperOffset) PreserveCollinear() bool {
+	return co.preserveCollinear
+}
+
+// SetPreserveCollinear sets whether collinear edges should be preserved
+// When true, the Union cleanup operation will retain collinear vertices
+// Reference: clipper.offset.h line 111-112
+func (co *ClipperOffset) SetPreserveCollinear(preserve bool) {
+	co.preserveCollinear = preserve
+}
+
+// ReverseSolution returns the current reverse_solution setting
+func (co *ClipperOffset) ReverseSolution() bool {
+	return co.reverseSolution
+}
+
+// SetReverseSolution sets whether the output path orientation should be reversed
+// Reference: clipper.offset.h line 114-115
+func (co *ClipperOffset) SetReverseSolution(reverse bool) {
+	co.reverseSolution = reverse
 }
 
 // Helper function to reverse a path in-place

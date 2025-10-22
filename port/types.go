@@ -120,8 +120,10 @@ const (
 
 // OffsetOptions contains options for path offsetting
 type OffsetOptions struct {
-	MiterLimit   float64 // maximum allowed miter join length (default: 2.0)
-	ArcTolerance float64 // maximum allowed deviation from true arc (default: 0.25)
+	MiterLimit        float64 // maximum allowed miter join length (default: 2.0)
+	ArcTolerance      float64 // maximum allowed deviation from true arc (default: 0.25)
+	PreserveCollinear bool    // preserve collinear edges in Union cleanup (default: false)
+	ReverseSolution   bool    // reverse output path orientation (default: false)
 }
 
 // ==============================================================================

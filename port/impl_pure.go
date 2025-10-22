@@ -21,6 +21,8 @@ func inflatePathsImpl(paths Paths64, delta float64, joinType JoinType, endType E
 	}
 
 	co := NewClipperOffset(opts.MiterLimit, opts.ArcTolerance)
+	co.SetPreserveCollinear(opts.PreserveCollinear)
+	co.SetReverseSolution(opts.ReverseSolution)
 	co.AddPaths(paths, joinType, endType)
 	return co.Execute(delta)
 }
