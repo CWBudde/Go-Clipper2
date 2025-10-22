@@ -1,20 +1,10 @@
 package clipper
 
 import (
-	"bytes"
 	"testing"
 )
 
 func TestPositiveFillRuleDebug(t *testing.T) {
-	// Enable debug for this test
-	VattiDebug = true
-	debugBuf := &bytes.Buffer{}
-	VattiDebugOutput = debugBuf
-	defer func() {
-		VattiDebug = false
-		VattiDebugOutput = nil
-	}()
-
 	// Two overlapping rectangles (CCW orientation)
 	subject := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
 	clip := Paths64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}}
@@ -26,9 +16,6 @@ func TestPositiveFillRuleDebug(t *testing.T) {
 	t.Logf("Clip area: %.1f (CCW=%v)", clipArea, IsPositive64(clip[0]))
 
 	result, err := Intersect64(subject, clip, Positive)
-
-	// Print debug output
-	t.Log("\n=== DEBUG LOG ===\n" + debugBuf.String() + "\n=== END DEBUG LOG ===")
 
 	if err != nil {
 		t.Fatalf("Intersect64 failed: %v", err)

@@ -230,3 +230,94 @@ func TestRectClip64(t *testing.T) {
 		t.Fatalf("expected non-empty clipped result")
 	}
 }
+
+func TestMinkowskiSum64BasicSquare(t *testing.T) {
+	// Simple square pattern on a line path
+	pattern := Path64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
+	path := Path64{{0, 0}, {10, 0}, {10, 10}}
+
+	result, err := MinkowskiSum64(pattern, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatalf("expected non-empty result from MinkowskiSum64")
+	}
+	t.Logf("MinkowskiSum result: %d paths", len(result))
+}
+
+func TestMinkowskiSum64ClosedPath(t *testing.T) {
+	// Square pattern on a closed square path
+	pattern := Path64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
+	path := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+
+	result, err := MinkowskiSum64(pattern, path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatalf("expected non-empty result from MinkowskiSum64")
+	}
+	t.Logf("MinkowskiSum closed result: %d paths", len(result))
+}
+
+func TestMinkowskiDiff64BasicSquare(t *testing.T) {
+	// Simple square pattern on a line path
+	pattern := Path64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
+	path := Path64{{0, 0}, {10, 0}, {10, 10}}
+
+	result, err := MinkowskiDiff64(pattern, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatalf("expected non-empty result from MinkowskiDiff64")
+	}
+	t.Logf("MinkowskiDiff result: %d paths", len(result))
+}
+
+func TestMinkowskiDiff64ClosedPath(t *testing.T) {
+	// Square pattern on a closed square path
+	pattern := Path64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
+	path := Path64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+
+	result, err := MinkowskiDiff64(pattern, path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatalf("expected non-empty result from MinkowskiDiff64")
+	}
+	t.Logf("MinkowskiDiff closed result: %d paths", len(result))
+}
+
+func TestMinkowskiSum64EmptyInput(t *testing.T) {
+	pattern := Path64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
+	empty := Path64{}
+
+	result, err := MinkowskiSum64(pattern, empty, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 0 {
+		t.Fatalf("expected empty result for empty path input, got %d paths", len(result))
+	}
+}
+
+func TestMinkowskiSum64Circle(t *testing.T) {
+	// Create a circular pattern (approximated with 8 points)
+	circle := Path64{
+		{10, 0}, {7, 7}, {0, 10}, {-7, 7},
+		{-10, 0}, {-7, -7}, {0, -10}, {7, -7},
+	}
+	path := Path64{{0, 0}, {50, 0}}
+
+	result, err := MinkowskiSum64(circle, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatalf("expected non-empty result from MinkowskiSum64 with circle")
+	}
+	t.Logf("MinkowskiSum circle result: %d paths", len(result))
+}

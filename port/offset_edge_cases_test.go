@@ -315,7 +315,7 @@ func TestOffsetPathWithDuplicatePoints(t *testing.T) {
 	// Path with consecutive duplicate points
 	pathWithDupes := Path64{
 		{0, 0},
-		{0, 0},   // duplicate
+		{0, 0}, // duplicate
 		{100, 0},
 		{100, 0}, // duplicate
 		{100, 100},

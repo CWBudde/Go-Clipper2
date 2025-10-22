@@ -87,11 +87,6 @@ func markLocalMinimaAndMaxima(vertices []*Vertex, isOpen bool) {
 	n := len(vertices)
 	v0 := vertices[0]
 
-	debugLog("markLocalMinimaAndMaxima: %d vertices, isOpen=%v, v0=%v", n, isOpen, v0.Pt)
-	for i, v := range vertices {
-		debugLog("  Vertex[%d]: %v", i, v.Pt)
-	}
-
 	// Determine initial direction (going_up)
 	// For closed paths, skip over horizontal edges to find true direction
 	var goingUp bool
@@ -129,7 +124,6 @@ func markLocalMinimaAndMaxima(vertices []*Vertex, isOpen bool) {
 	}
 
 	goingUp0 := goingUp
-	debugLog("  Initial goingUp=%v, goingUp0=%v", goingUp, goingUp0)
 
 	// Traverse vertices and mark local minima/maxima (C++ line 681-693)
 	for i := 1; i < n; i++ {
@@ -138,12 +132,10 @@ func markLocalMinimaAndMaxima(vertices []*Vertex, isOpen bool) {
 
 		if curr.Pt.Y > prev.Pt.Y && goingUp {
 			// Direction change from up to down - mark local maximum
-			debugLog("  Vertex[%d] %v: LocalMax (was going up, now going down)", i-1, prev.Pt)
 			prev.Flags |= VertexFlagsLocalMax
 			goingUp = false
 		} else if curr.Pt.Y < prev.Pt.Y && !goingUp {
 			// Direction change from down to up - mark local minimum
-			debugLog("  Vertex[%d] %v: LocalMin (was going down, now going up)", i-1, prev.Pt)
 			prev.Flags |= VertexFlagsLocalMin
 			goingUp = true
 		}

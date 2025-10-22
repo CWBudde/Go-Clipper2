@@ -40,21 +40,12 @@ func NewVattiEngine(clipType ClipType, fillRule FillRule) *VattiEngine {
 
 // ExecuteClipping performs the complete boolean clipping operation
 func (ve *VattiEngine) ExecuteClipping(subjects, subjectsOpen, clips Paths64) (solution, solutionOpen Paths64, err error) {
-	debugLogPhase("INITIALIZATION")
-	debugLog("ClipType: %v, FillRule: %v", ve.clipType, ve.fillRule)
-	debugLog("Subject paths: %v", subjects)
-	debugLog("Clip paths: %v", clips)
-
-	// Phase 2: Path preprocessing - Convert paths to vertex chains and find local minima
-	debugLogPhase("PATH PREPROCESSING")
 	if err := ve.addPaths(subjects, PathTypeSubject, false); err != nil {
 		return nil, nil, err
 	}
 	if err := ve.addPaths(clips, PathTypeClip, false); err != nil {
 		return nil, nil, err
 	}
-
-	debugLog("Found %d local minima", len(ve.minimaList))
 
 	// Handle empty input case
 	if len(ve.minimaList) == 0 {
@@ -64,23 +55,14 @@ func (ve *VattiEngine) ExecuteClipping(subjects, subjectsOpen, clips Paths64) (s
 	// Sort local minima by Y coordinate
 	ve.sortLocalMinima()
 
-	debugLog("Sorted local minima:")
-	for i, lm := range ve.minimaList {
-		debugLog("  LM[%d]: Y=%d, Point=%v", i, lm.Vertex.Pt.Y, lm.Vertex.Pt)
-	}
-
 	// Execute main scanline algorithm
-	debugLogPhase("SCANLINE ALGORITHM")
 	if !ve.executeScanlineAlgorithm() {
 		return nil, nil, ErrClipperExecution
 	}
 
 	// Phase 6: Build output paths
-	debugLogPhase("BUILD OUTPUT")
 	solution = ve.buildSolutionPaths()
 	solutionOpen = Paths64{} // Open paths not yet supported
-
-	debugLog("Solution paths: %v", solution)
 
 	return solution, solutionOpen, nil
 }
@@ -160,21 +142,14 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 	// Build sorted list of scanline Y coordinates
 	scanlines := ve.getSortedScanlines()
 
-	debugLog("Processing %d scanlines: %v", len(scanlines), scanlines)
-
 	minimaIndex := 0 // Index into sorted minima list
 
 	// Process each scanline from top to bottom (high Y to low Y, like C++)
 	for i, y := range scanlines {
 		ve.currentY = y
 
-		debugLog("\n--- Scanline Y=%d ---", y)
-
 		// Phase 3: Insert local minima into Active Edge List
 		minimaIndex = ve.insertLocalMinimaIntoAEL(minimaIndex, y)
-
-		debugLog("After inserting minima:")
-		debugLogAEL(ve.activeEdges)
 
 		// Process horizontal edges (first time - after inserting minima)
 		// C++ line 2142
@@ -185,9 +160,6 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 			}
 			ve.DoHorizontal(horz)
 		}
-
-		debugLog("After first horizontal pass:")
-		debugLogAEL(ve.activeEdges)
 
 		// Phase 4: Process intersections
 		// Set botY to the bottom of the scanbeam (previous scanline Y, or current Y if first)
@@ -200,15 +172,9 @@ func (ve *VattiEngine) executeScanlineAlgorithm() bool {
 			return false
 		}
 
-		debugLog("After processing intersections:")
-		debugLogAEL(ve.activeEdges)
-
 		// Phase 5: Process top of scanbeam (updates CurrX, handles maxima, advances edges)
 		// C++ DoTopOfScanbeam line 2708
 		ve.doTopOfScanbeam(y)
-
-		debugLog("After doTopOfScanbeam:")
-		debugLogAEL(ve.activeEdges)
 
 		// Process horizontal edges (second time - after top of scanbeam)
 		// C++ line 2152
@@ -260,13 +226,10 @@ func (ve *VattiEngine) insertLocalMinimaIntoAEL(startIndex int, y int64) int {
 			ve.insertEdgeIntoAEL(leftEdge)
 			// Update winding counts for the left edge
 			ve.setWindingCount(leftEdge)
-			debugLog("Inserted LEFT edge at X=%d, WC=%d/%d, Contributing=%v",
-				leftEdge.CurrX, leftEdge.WindCount, leftEdge.WindCount2, ve.isContributingEdge(leftEdge))
 
 			// Push horizontal edges to queue (C++ line 1227)
 			if IsHorizontal(leftEdge) {
 				ve.PushHorz(leftEdge)
-				debugLog("  Pushed LEFT horizontal edge to queue")
 			}
 		}
 		if rightEdge != nil {
@@ -279,7 +242,6 @@ func (ve *VattiEngine) insertLocalMinimaIntoAEL(startIndex int, y int64) int {
 					leftEdge.NextInAEL.PrevInAEL = rightEdge
 				}
 				leftEdge.NextInAEL = rightEdge
-				debugLog("Inserted RIGHT edge immediately after LEFT edge")
 			} else {
 				// No left edge, use normal insertion
 				ve.insertEdgeIntoAEL(rightEdge)
@@ -292,44 +254,29 @@ func (ve *VattiEngine) insertLocalMinimaIntoAEL(startIndex int, y int64) int {
 			} else {
 				ve.setWindingCount(rightEdge)
 			}
-			debugLog("Inserted RIGHT edge at X=%d, WC=%d/%d, Contributing=%v",
-				rightEdge.CurrX, rightEdge.WindCount, rightEdge.WindCount2, ve.isContributingEdge(rightEdge))
 
 			// CRITICAL: After inserting right edge, check if it's out of order with edges to its right
 			// C++ lines 1288-1293: Immediately fix AEL ordering by swapping out-of-order edges
 			swapCount := 0
 			for rightEdge.NextInAEL != nil && ve.isValidAELOrder(rightEdge.NextInAEL, rightEdge) {
-				debugLog("  RIGHT edge out of order with next edge - swapping (swap #%d)", swapCount+1)
 				// Update winding counts at intersection
 				ve.intersectEdges(rightEdge, rightEdge.NextInAEL, rightEdge.Bot)
 				// Swap positions in AEL
 				ve.swapPositionsInAEL(rightEdge, rightEdge.NextInAEL)
 				swapCount++
 			}
-			if swapCount > 0 {
-				debugLog("  Performed %d swaps to fix AEL order for RIGHT edge", swapCount)
-			}
 
 			// Push horizontal edges to queue (C++ line 1227)
 			if IsHorizontal(rightEdge) {
 				ve.PushHorz(rightEdge)
-				debugLog("  Pushed RIGHT horizontal edge to queue")
 			}
 
 			// If both edges exist and LEFT edge is contributing, create a local minimum polygon
 			// This matches the C++ implementation at line 1283
 			// NOTE: We only check if LEFT edge is contributing, not both
-			debugLog("Checking if should create local min poly: leftEdge=%v, leftContributing=%v",
-				leftEdge != nil, leftEdge != nil && ve.isContributingEdge(leftEdge))
 			if leftEdge != nil && ve.isContributingEdge(leftEdge) {
-				debugLog("LEFT edge is contributing - creating local minimum polygon")
 				pt := Point64{leftEdge.CurrX, y}
 				ve.addLocalMinPoly(leftEdge, rightEdge, pt)
-			} else if leftEdge != nil {
-				debugLog("LEFT edge is NOT contributing (WC=%d/%d) - skipping local min poly creation",
-					leftEdge.WindCount, leftEdge.WindCount2)
-			} else {
-				debugLog("No left edge - skipping local min poly creation")
 			}
 		}
 
@@ -343,15 +290,6 @@ func (ve *VattiEngine) insertLocalMinimaIntoAEL(startIndex int, y int64) int {
 func (ve *VattiEngine) createEdgesFromLocalMinimum(lm *LocalMinima) (*Edge, *Edge) {
 	vertex := lm.Vertex
 
-	debugLog("Creating edges from LM at %v, Prev=%v, Next=%v",
-		vertex.Pt, vertex.Prev != nil, vertex.Next != nil)
-	if vertex.Prev != nil {
-		debugLog("  Prev.Pt=%v (Y>curr: %v)", vertex.Prev.Pt, vertex.Prev.Pt.Y > vertex.Pt.Y)
-	}
-	if vertex.Next != nil {
-		debugLog("  Next.Pt=%v (Y>curr: %v)", vertex.Next.Pt, vertex.Next.Pt.Y > vertex.Pt.Y)
-	}
-
 	// Create edges from local minimum
 	// In top-to-bottom processing, edges descend (Y decreases)
 	// But horizontal edges (same Y) are also valid and handled specially
@@ -360,16 +298,13 @@ func (ve *VattiEngine) createEdgesFromLocalMinimum(lm *LocalMinima) (*Edge, *Edg
 	// Create left bound from prev vertex (descending edge)
 	if vertex.Prev != nil {
 		leftEdge = ve.createEdge(vertex, vertex.Prev, lm, true)
-		debugLog("  Created LEFT edge from %v to %v", vertex.Pt, vertex.Prev.Pt)
 	}
 
 	// Create right bound from next vertex (descending edge)
 	if vertex.Next != nil {
 		rightEdge = ve.createEdge(vertex, vertex.Next, lm, false)
-		debugLog("  Created RIGHT edge from %v to %v", vertex.Pt, vertex.Next.Pt)
 	}
 
-	debugLog("  Returning: leftEdge=%v, rightEdge=%v", leftEdge != nil, rightEdge != nil)
 	return leftEdge, rightEdge
 }
 
@@ -439,45 +374,34 @@ func (ve *VattiEngine) doTopOfScanbeam(y int64) {
 	edge := ve.activeEdges
 	edgeCount := 0
 
-	debugLog("[doTopOfScanbeam] Starting at Y=%d", y)
 	for edge != nil {
-		debugLog("[doTopOfScanbeam]   Processing edge[%d] ptr=%p: Top=(%d,%d), CurrX=%d, NextInAEL=%p",
-			edgeCount, edge, edge.Top.X, edge.Top.Y, edge.CurrX, edge.NextInAEL)
-
 		// Note: edge will never be horizontal here (horizontals are processed separately)
 		if edge.Top.Y == y {
 			edge.CurrX = edge.Top.X
-			debugLog("[doTopOfScanbeam]     Edge is at top Y=%d, CurrX updated to %d", y, edge.CurrX)
 
 			if edge.VertexTop.isLocalMaximum() {
 				// TOP OF BOUND (MAXIMA) - call doMaxima
-				debugLog("[doTopOfScanbeam]     Edge is LOCAL MAXIMUM - calling doMaxima")
 				edge = ve.doMaxima(edge) // doMaxima returns next edge to process
-				debugLog("[doTopOfScanbeam]     doMaxima returned edge=%p", edge)
 				edgeCount++
 				continue
 			} else {
 				// INTERMEDIATE VERTEX - edge continues to next vertex
-				debugLog("[doTopOfScanbeam]     Edge is INTERMEDIATE - adding point and updating")
 				if edge.OutRec != nil {
 					ve.addOutPt(edge, edge.Top, "doTopOfScanbeam:intermediate")
 				}
 				ve.UpdateEdgeIntoAEL(edge)
 				if IsHorizontal(edge) {
-					debugLog("[doTopOfScanbeam]     Edge became horizontal - pushing to horz queue")
 					ve.PushHorz(edge) // Horizontals are processed later
 				}
 			}
 		} else {
 			// Not at top yet - update CurrX for this Y
 			edge.CurrX = ve.topX(edge, y)
-			debugLog("[doTopOfScanbeam]     Edge not at top yet, CurrX updated to %d", edge.CurrX)
 		}
 
 		edge = edge.NextInAEL
 		edgeCount++
 	}
-	debugLog("[doTopOfScanbeam] Finished processing %d edges", edgeCount)
 }
 
 // doMaxima handles edge processing at local maxima
@@ -486,29 +410,17 @@ func (ve *VattiEngine) doMaxima(e *Edge) *Edge {
 	nextE := e.NextInAEL
 	prevE := e.PrevInAEL
 
-	debugLog("[doMaxima] Processing edge at Top=(%d,%d), VertexTop=%p, OutRec=%v",
-		e.Top.X, e.Top.Y, e.VertexTop, e.OutRec != nil)
-
 	// Find the paired edge at this maximum
 	maxPair := ve.getMaximaPair(e)
 	if maxPair == nil {
-		debugLog("[doMaxima]   NO PAIR FOUND - removing single edge")
 		// No pair found - just remove this edge
 		ve.removeEdgeFromAEL(e)
 		return nextE
 	}
 
-	debugLog("[doMaxima]   PAIR FOUND at Top=(%d,%d), VertexTop=%p, OutRec=%v",
-		maxPair.Top.X, maxPair.Top.Y, maxPair.VertexTop, maxPair.OutRec != nil)
-
 	// If both edges are hot (contributing), join their OutRecs
 	if e.OutRec != nil && maxPair.OutRec != nil {
-		debugLog("[doMaxima]   Both edges hot - joining OutRec #%d and #%d",
-			e.OutRec.Idx, maxPair.OutRec.Idx)
 		ve.addLocalMaxPoly(e, maxPair, e.Top)
-	} else {
-		debugLog("[doMaxima]   Not joining - e.OutRec=%v, maxPair.OutRec=%v",
-			e.OutRec != nil, maxPair.OutRec != nil)
 	}
 
 	// Remove both edges from AEL
@@ -525,43 +437,29 @@ func (ve *VattiEngine) doMaxima(e *Edge) *Edge {
 // getMaximaPair finds the paired edge at a local maximum
 // C++ GetMaximaPair (line 254) + backward search extension
 func (ve *VattiEngine) getMaximaPair(e *Edge) *Edge {
-	debugLog("[getMaximaPair] Searching for pair of edge=%p at Top=(%d,%d), VertexTop=%p",
-		e, e.Top.X, e.Top.Y, e.VertexTop)
-	debugLog("[getMaximaPair]   e.NextInAEL=%p, e.PrevInAEL=%p", e.NextInAEL, e.PrevInAEL)
-
 	// Search forward first (standard C++ behavior)
 	e2 := e.NextInAEL
-	debugLog("[getMaximaPair]   Starting FORWARD search from e2=%p", e2)
 	searchCount := 0
 	for e2 != nil {
-		debugLog("[getMaximaPair]   Checking forward edge[%d] ptr=%p: VertexTop=%p, match=%v",
-			searchCount, e2, e2.VertexTop, e2.VertexTop == e.VertexTop)
 		if e2.VertexTop == e.VertexTop {
-			debugLog("[getMaximaPair]   FORWARD MATCH FOUND at position %d!", searchCount)
 			return e2 // Found!
 		}
 		e2 = e2.NextInAEL
 		searchCount++
 	}
-	debugLog("[getMaximaPair]   Forward search: NO MATCH - searched %d edges", searchCount)
 
 	// If forward search fails, search backward
 	// This handles cases where UpdateEdgeIntoAEL advanced an edge to the same VertexTop
 	// but it's positioned earlier in the AEL due to lower CurrX
 	e2 = e.PrevInAEL
-	debugLog("[getMaximaPair]   Starting BACKWARD search from e2=%p", e2)
 	searchCount = 0
 	for e2 != nil {
-		debugLog("[getMaximaPair]   Checking backward edge[%d] ptr=%p: VertexTop=%p, match=%v",
-			searchCount, e2, e2.VertexTop, e2.VertexTop == e.VertexTop)
 		if e2.VertexTop == e.VertexTop {
-			debugLog("[getMaximaPair]   BACKWARD MATCH FOUND at position %d!", searchCount)
 			return e2 // Found!
 		}
 		e2 = e2.PrevInAEL
 		searchCount++
 	}
-	debugLog("[getMaximaPair]   Backward search: NO MATCH - searched %d edges", searchCount)
 
 	return nil
 }
@@ -880,13 +778,9 @@ func (ve *VattiEngine) processIntersections(topY int64) bool {
 // C++ ClipperBase::IsValidAelOrder (line 1119)
 // Returns true if newcomer should be AFTER resident in the AEL
 func (ve *VattiEngine) isValidAELOrder(resident, newcomer *Edge) bool {
-	debugLog("[isValidAELOrder] Checking: resident.CurrX=%d, newcomer.CurrX=%d",
-		resident.CurrX, newcomer.CurrX)
-
 	// First check: if CurrX values differ, order by X position
 	if newcomer.CurrX != resident.CurrX {
 		result := newcomer.CurrX > resident.CurrX
-		debugLog("[isValidAELOrder]   Different X - result=%v", result)
 		return result
 	}
 
@@ -959,9 +853,6 @@ func (ve *VattiEngine) intersectEdges(e1, e2 *Edge, pt Point64) {
 			}
 		}
 	}
-
-	debugLog("[intersectEdges] Updated winding: e1: WC=%d WC2=%d, e2: WC=%d WC2=%d",
-		e1.WindCount, e1.WindCount2, e2.WindCount, e2.WindCount2)
 }
 
 // ==============================================================================
@@ -974,9 +865,6 @@ func (ve *VattiEngine) setWindingCount(edge *Edge) {
 	// Find the nearest closed path edge of the same PolyType in AEL (heading left)
 	pathType := edge.LocalMin.PathType
 	prev := edge.PrevInAEL
-
-	debugLog("[setWindingCount] Edge at Bot=(%d,%d), pathType=%v, WindDx=%d",
-		edge.Bot.X, edge.Bot.Y, pathType, edge.WindDx)
 
 	// Skip edges of different path type or open paths
 	for prev != nil && prev.LocalMin.PathType != pathType {
@@ -1049,9 +937,6 @@ func (ve *VattiEngine) setWindingCount(edge *Edge) {
 			e2 = e2.NextInAEL
 		}
 	}
-
-	debugLog("[setWindingCount]   Result: WindCount=%d, WindCount2=%d, Contributing=%v",
-		edge.WindCount, edge.WindCount2, ve.isContributingEdge(edge))
 }
 
 // updateWindingCounts calculates winding counts for all active edges
@@ -1179,26 +1064,20 @@ func (ve *VattiEngine) addLocalMinPoly(e1, e2 *Edge, pt Point64) *OutPt {
 	outPt.Prev = outPt
 	outRec.Pts = outPt
 
-	debugLog("addLocalMinPoly: Created OutRec #%d for edges at (%d,%d)", outRec.Idx, pt.X, pt.Y)
-
 	return outPt
 }
 
 // addLocalMaxPoly handles when edges stop contributing (local maximum)
 // This joins two OutRec paths if they're different, closing the polygon
 func (ve *VattiEngine) addLocalMaxPoly(e1, e2 *Edge, pt Point64) *OutPt {
-	debugLog("addLocalMaxPoly: Processing edges at (%d,%d)", pt.X, pt.Y)
-
 	// Add the point to e1's OutRec
 	result := ve.addOutPt(e1, pt, "addLocalMaxPoly")
 
 	if e1.OutRec == e2.OutRec {
 		// Same OutRec - just update the pts reference to close the loop
 		e1.OutRec.Pts = result
-		debugLog("  Same OutRec #%d - closing polygon", e1.OutRec.Idx)
 	} else {
 		// Different OutRecs - need to join them
-		debugLog("  Different OutRecs (#%d and #%d) - joining", e1.OutRec.Idx, e2.OutRec.Idx)
 		if e1.OutRec.Idx < e2.OutRec.Idx {
 			ve.joinOutrecPaths(e1, e2)
 		} else {
@@ -1212,8 +1091,6 @@ func (ve *VattiEngine) addLocalMaxPoly(e1, e2 *Edge, pt Point64) *OutPt {
 // joinOutrecPaths merges e2's OutRec path into e1's OutRec path
 // This is the critical function that creates properly ordered polygons
 func (ve *VattiEngine) joinOutrecPaths(e1, e2 *Edge) {
-	debugLog("joinOutrecPaths: Joining OutRec #%d into OutRec #%d", e2.OutRec.Idx, e1.OutRec.Idx)
-
 	// Get the start and end points of each circular list
 	p1St := e1.OutRec.Pts
 	p2St := e2.OutRec.Pts
@@ -1235,7 +1112,6 @@ func (ve *VattiEngine) joinOutrecPaths(e1, e2 *Edge) {
 		if e1.OutRec.FrontEdge != nil {
 			e1.OutRec.FrontEdge.OutRec = e1.OutRec
 		}
-		debugLog("  Joined front-to-front")
 	} else {
 		// Join back to back
 		// Link: p1End <- p2St -> p1End and p1St -> p2End <- p1St
@@ -1247,7 +1123,6 @@ func (ve *VattiEngine) joinOutrecPaths(e1, e2 *Edge) {
 		if e1.OutRec.BackEdge != nil {
 			e1.OutRec.BackEdge.OutRec = e1.OutRec
 		}
-		debugLog("  Joined back-to-back")
 	}
 
 	// Mark e2's OutRec as deleted (set pts to nil)
@@ -1263,7 +1138,6 @@ func (ve *VattiEngine) joinOutrecPaths(e1, e2 *Edge) {
 // The caller parameter helps debug duplicate point issues
 func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 	if edge.OutRec == nil {
-		debugLog("WARNING: addOutPt[%s] called on edge without OutRec at (%d,%d)", caller, pt.X, pt.Y)
 		return nil
 	}
 
@@ -1281,7 +1155,6 @@ func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 		outPt.Next = outPt
 		outPt.Prev = outPt
 		outRec.Pts = outPt
-		debugLog("addOutPt[%s]: Added FIRST point (%d,%d) to OutRec #%d", caller, pt.X, pt.Y, outRec.Idx)
 		return outPt
 	}
 
@@ -1293,35 +1166,18 @@ func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 	current := opFront
 	safetyCount := 0
 	maxPoints := 10000 // Reasonable upper limit for points in a single OutRec
-	logInterval := 100 // Log every N points to track progress
 	for {
 		if current.Pt == pt {
-			debugLog("addOutPt[%s]: DUPLICATE DETECTED! Point (%d,%d) already exists in OutRec #%d (skipping)",
-				caller, pt.X, pt.Y, outRec.Idx)
 			return current // Return existing point
 		}
 		current = current.Next
 		safetyCount++
 
-		// Log progress periodically
-		if safetyCount%logInterval == 0 {
-			debugLog("addOutPt[%s]: Checked %d points in circular list, current=(%d,%d)",
-				caller, safetyCount, current.Pt.X, current.Pt.Y)
-		}
-
 		if current == opFront {
-			debugLog("addOutPt[%s]: Circular list complete after %d points", caller, safetyCount)
 			break // Completed the circle
 		}
 
 		if safetyCount > maxPoints {
-			debugLog("addOutPt[%s]: ERROR - circular list check exceeded %d iterations! Circular list may be corrupted. OutRec #%d",
-				caller, maxPoints, outRec.Idx)
-			debugLog("  Checked %d points without completing circle", safetyCount)
-			debugLog("  opFront: %p (%d,%d), current: %p (%d,%d)",
-				opFront, opFront.Pt.X, opFront.Pt.Y, current, current.Pt.X, current.Pt.Y)
-			debugLog("  current.Next: %p, current.Prev: %p", current.Next, current.Prev)
-			// Return new point anyway to avoid infinite loop
 			break
 		}
 	}
@@ -1342,9 +1198,6 @@ func (ve *VattiEngine) addOutPt(edge *Edge, pt Point64, caller string) *OutPt {
 
 	if toFront {
 		outRec.Pts = newOp
-		debugLog("addOutPt[%s]: Added point (%d,%d) to FRONT of OutRec #%d", caller, pt.X, pt.Y, outRec.Idx)
-	} else {
-		debugLog("addOutPt[%s]: Added point (%d,%d) to BACK of OutRec #%d", caller, pt.X, pt.Y, outRec.Idx)
 	}
 
 	return newOp
@@ -1472,6 +1325,181 @@ func (ve *VattiEngine) buildPathFromOutRec(outRec *OutRec) Path64 {
 }
 
 // ==============================================================================
+// PolyTree Building (Hierarchical Output)
+// ==============================================================================
+
+// BuildTree64 constructs a hierarchical PolyTree from the output records.
+// Reference: C++ Clipper64::BuildTree64 in clipper.engine.cpp lines 3027-3053
+func (ve *VattiEngine) BuildTree64(polytree *PolyTree64, openPaths *Paths64) {
+	polytree.Clear()
+	if openPaths != nil {
+		*openPaths = make(Paths64, 0)
+	}
+
+	// Iterate through all output records
+	for _, outRec := range ve.outRecords {
+		if outRec == nil || outRec.Pts == nil {
+			continue
+		}
+
+		// Build the path from the output record
+		path := ve.buildPathFromOutRec(outRec)
+		if len(path) < 3 {
+			continue // Skip degenerate polygons
+		}
+
+		// Store the path in the output record for hierarchy building
+		// (In C++ this is done in BuildPath64, but we need it here)
+		// Create a copy to store
+		pathCopy := make(Path64, len(path))
+		copy(pathCopy, path)
+		outRec.Pts = ve.pathToOutPtList(pathCopy) // Ensure consistent structure
+
+		// Check bounds and build hierarchy
+		if ve.checkBounds(outRec) {
+			ve.recursiveCheckOwners(outRec, polytree)
+		}
+	}
+}
+
+// pathToOutPtList converts a path back to an OutPt circular linked list
+// This is needed to ensure the OutRec has a valid point list
+func (ve *VattiEngine) pathToOutPtList(path Path64) *OutPt {
+	if len(path) == 0 {
+		return nil
+	}
+
+	// Create first point
+	first := &OutPt{Pt: path[0]}
+	prev := first
+
+	// Create remaining points and link them
+	for i := 1; i < len(path); i++ {
+		op := &OutPt{Pt: path[i]}
+		prev.Next = op
+		op.Prev = prev
+		prev = op
+	}
+
+	// Close the circular list
+	prev.Next = first
+	first.Prev = prev
+
+	return first
+}
+
+// checkBounds validates that an output record has valid bounds.
+// Reference: C++ CheckBounds in clipper.engine.cpp
+func (ve *VattiEngine) checkBounds(outRec *OutRec) bool {
+	if outRec == nil || outRec.Pts == nil {
+		return false
+	}
+
+	// Build path and check if it has valid area
+	path := ve.buildPathFromOutRec(outRec)
+	if len(path) < 3 {
+		return false
+	}
+
+	// Calculate bounds
+	bounds := Bounds64(path)
+	if bounds.Width() <= 0 || bounds.Height() <= 0 {
+		return false
+	}
+
+	return true
+}
+
+// recursiveCheckOwners validates the ownership hierarchy and builds the PolyTree.
+// Reference: C++ RecursiveCheckOwners in clipper.engine.cpp lines 2967-2990
+func (ve *VattiEngine) recursiveCheckOwners(outRec *OutRec, polypath *PolyPath64) {
+	// Pre-condition: outRec will have valid bounds
+	// Post-condition: if a valid path, outRec will have a polypath
+
+	if outRec.PolyPath != nil {
+		return // Already processed
+	}
+
+	// Walk up the owner chain to find valid parent
+	for outRec.Owner != nil {
+		// Check if owner's polygon contains this polygon
+		if outRec.Owner.Pts != nil && ve.checkBounds(outRec.Owner) {
+			ownerPath := ve.buildPathFromOutRec(outRec.Owner)
+			childPath := ve.buildPathFromOutRec(outRec)
+
+			// Check if owner bounds contain child bounds
+			ownerBounds := Bounds64(ownerPath)
+			childBounds := Bounds64(childPath)
+
+			if ve.boundsContains(ownerBounds, childBounds) &&
+				ve.path2ContainsPath1(childPath, ownerPath) {
+				break // Found valid owner
+			}
+		}
+		outRec.Owner = outRec.Owner.Owner
+	}
+
+	// Build the path for this output record
+	path := ve.buildPathFromOutRec(outRec)
+
+	// Add to tree hierarchy
+	if outRec.Owner != nil {
+		// This polygon is owned by another
+		if outRec.Owner.PolyPath == nil {
+			// Recursively process owner first
+			ve.recursiveCheckOwners(outRec.Owner, polypath)
+		}
+		outRec.PolyPath = outRec.Owner.PolyPath.AddChild(path)
+	} else {
+		// This is a top-level polygon
+		outRec.PolyPath = polypath.AddChild(path)
+	}
+}
+
+// boundsContains checks if bounds 'a' fully contains bounds 'b'
+func (ve *VattiEngine) boundsContains(a, b Rect64) bool {
+	return b.Left >= a.Left && b.Right <= a.Right &&
+		b.Top >= a.Top && b.Bottom <= a.Bottom
+}
+
+// path2ContainsPath1 checks if path2 contains path1 using point-in-polygon tests.
+// Reference: C++ Path2ContainsPath1 in clipper.h
+func (ve *VattiEngine) path2ContainsPath1(path1, path2 Path64) bool {
+	// Check if all points of path1 are inside path2
+	// We need at least 2 consecutive points inside to be certain
+	// (to account for touching edges)
+
+	insideCount := 0
+	outsideCount := 0
+
+	for _, pt := range path1 {
+		result := PointInPolygon(pt, path2, ve.fillRule)
+		switch result {
+		case Inside:
+			insideCount++
+			if insideCount > 1 {
+				return true // At least 2 points inside = contained
+			}
+		case Outside:
+			outsideCount++
+			if outsideCount > 1 {
+				return false // At least 2 points outside = not contained
+			}
+		}
+	}
+
+	// If we got here, most points are on the boundary
+	// Check the midpoint of the bounds as a tiebreaker
+	if insideCount > 0 && outsideCount == 0 {
+		return true
+	}
+
+	bounds1 := Bounds64(path1)
+	midPt := bounds1.MidPoint()
+	return PointInPolygon(midPt, path2, ve.fillRule) == Inside
+}
+
+// ==============================================================================
 // Horizontal Edge Processing (C++ DoHorizontal subsystem)
 // ==============================================================================
 
@@ -1505,19 +1533,14 @@ func IsHorizontal(e *Edge) bool {
 // UpdateEdgeIntoAEL advances an edge to its next vertex
 // C++ line 1742-1791
 func (ve *VattiEngine) UpdateEdgeIntoAEL(e *Edge) {
-	debugLog("UpdateEdgeIntoAEL: Advancing edge from (%d,%d)", e.Top.X, e.Top.Y)
-
 	// Advance edge to next vertex
 	e.Bot = e.Top
 	e.VertexTop = ve.getNextVertex(e)
 	if e.VertexTop == nil {
-		debugLog("  ERROR: getNextVertex returned nil!")
 		return
 	}
 	e.Top = e.VertexTop.Pt
 	e.CurrX = e.Bot.X
-
-	debugLog("  New Top: (%d,%d), IsHorizontal: %v", e.Top.X, e.Top.Y, IsHorizontal(e))
 
 	// Recalculate slope (Dx)
 	if e.Top.Y != e.Bot.Y {
@@ -1533,14 +1556,8 @@ func (ve *VattiEngine) UpdateEdgeIntoAEL(e *Edge) {
 
 	// If edge is hot (contributing), add the bottom point
 	if e.OutRec != nil {
-		debugLog("  Adding output point at (%d,%d)", e.Bot.X, e.Bot.Y)
 		ve.addOutPt(e, e.Bot, "UpdateEdgeIntoAEL")
-		debugLog("  Output point added successfully")
 	}
-
-	// Note: We don't add horizontal edges to scanline set here
-	// They will be processed by DoHorizontal
-	debugLog("  UpdateEdgeIntoAEL complete")
 }
 
 // getNextVertex returns the next vertex in the chain
@@ -1590,9 +1607,6 @@ func (ve *VattiEngine) ResetHorzDirection(horz *Edge, maxPair *Edge) (horzLeft, 
 // CRITICAL: Must process consecutive horizontal segments in a single call via while(true) loop
 // DO NOT push back to horizontal queue - this causes infinite loops
 func (ve *VattiEngine) DoHorizontal(horz *Edge) {
-	debugLog("DoHorizontal: Processing horizontal edge at Y=%d from X=%d to X=%d",
-		horz.Bot.Y, horz.Bot.X, horz.Top.X)
-
 	y := horz.Bot.Y
 
 	// Find vertex_max - the vertex where this horizontal terminates
@@ -1611,11 +1625,8 @@ func (ve *VattiEngine) DoHorizontal(horz *Edge) {
 	loopCount := 0
 	for {
 		loopCount++
-		debugLog("  DoHorizontal: Loop iteration %d, horz at (%d,%d)->(%d,%d)",
-			loopCount, horz.Bot.X, horz.Bot.Y, horz.Top.X, horz.Top.Y)
 
 		if loopCount > 100 {
-			debugLog("  ERROR: DoHorizontal loop count exceeded 100, breaking to prevent infinite loop")
 			break
 		}
 
@@ -1655,9 +1666,6 @@ func (ve *VattiEngine) DoHorizontal(horz *Edge) {
 		horzLeft, horzRight := ve.ResetHorzDirection(horz, maxPair)
 		isLeftToRight := horz.Dx > 0
 
-		debugLog("  Horizontal bounds: left=%d, right=%d, isLeftToRight=%v, maxPair=%v",
-			horzLeft, horzRight, isLeftToRight, maxPair != nil)
-
 		// Inner loop: process edges that intersect this horizontal segment
 		// C++ line 2587: while (e)
 		var e *Edge
@@ -1671,7 +1679,6 @@ func (ve *VattiEngine) DoHorizontal(horz *Edge) {
 			// C++ line 2589: if (e->vertex_top == vertex_max)
 			if e.VertexTop == vertexMax {
 				// Found the maxima pair - add local maximum and delete both edges
-				debugLog("  Found vertex_max pair, creating local maximum")
 
 				if isHot {
 					// Advance horz to vertex_max if needed
@@ -1746,7 +1753,6 @@ func (ve *VattiEngine) DoHorizontal(horz *Edge) {
 		// We must compare against the original Y (from horz.Bot.Y at start), not horz.Top.Y which changes
 		if nextVertex == nil || nextVertex.Pt.Y != y {
 			// No more consecutive horizontals at this Y level
-			debugLog("  Breaking: nextVertex.Y=%d != horizontal Y=%d", nextVertex.Pt.Y, y)
 			break
 		}
 

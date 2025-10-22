@@ -1,8 +1,10 @@
 //go:build clipper_cgo
+
 #include "clipper_bridge.h"
 
 // Include the main clipper header which provides all inline implementations
 #include <clipper2/clipper.h>
+#include <clipper2/clipper.minkowski.h>
 
 // Include the actual implementation files to resolve undefined references
 #include "../third_party/clipper2/CPP/Clipper2Lib/src/clipper.engine.cpp"
@@ -16,6 +18,16 @@
 using namespace Clipper2Lib;
 
 // ---- helpers: convert between C and C++ types --------------------------------
+
+static Path64 toPath64(const cpath64* cp) {
+  Path64 out;
+  if (!cp || cp->len <= 0) return out;
+  out.reserve(cp->len);
+  for (int i = 0; i < cp->len; ++i) {
+    out.push_back(Point64{ cp->pts[i].x, cp->pts[i].y });
+  }
+  return out;
+}
 
 static Paths64 toPaths64(const cpaths64* cp) {
   Paths64 out;
@@ -175,6 +187,46 @@ int clipper2c_rectclip64(int64_t left, int64_t top, int64_t right, int64_t botto
     Paths64 in = toPaths64(in_paths);
     Rect64 r{left, top, right, bottom};
     Paths64 out = RectClip(r, in);
+    if (!fromPaths64(out, out_paths)) return 2;
+    return 0;
+  } catch (...) {
+    return 1;
+  }
+}
+
+int clipper2c_minkowski_sum64(const cpath64* pattern, const cpath64* path,
+                              int is_closed, cpaths64* out_paths) {
+  try {
+    Path64 pat = toPath64(pattern);
+    Path64 pth = toPath64(path);
+    Paths64 out = MinkowskiSum(pat, pth, is_closed != 0);
+    if (!fromPaths64(out, out_paths)) return 2;
+    return 0;
+  } catch (...) {
+    return 1;
+  }
+}
+
+int clipper2c_minkowski_diff64(const cpath64* pattern, const cpath64* path,
+                               int is_closed, cpaths64* out_paths) {
+  try {
+    Path64 pat = toPath64(pattern);
+    Path64 pth = toPath64(path);
+    Paths64 out = MinkowskiDiff(pat, pth, is_closed != 0);
+    if (!fromPaths64(out, out_paths)) return 2;
+    return 0;
+  } catch (...) {
+    return 1;
+  }
+}
+
+int clipper2c_rectcliplines64(int64_t left, int64_t top, int64_t right, int64_t bottom,
+                              const cpaths64* in_paths,
+                              cpaths64* out_paths) {
+  try {
+    Paths64 in = toPaths64(in_paths);
+    Rect64 r{left, top, right, bottom};
+    Paths64 out = RectClipLines(r, in);
     if (!fromPaths64(out, out_paths)) return 2;
     return 0;
   } catch (...) {

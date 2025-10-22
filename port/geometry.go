@@ -311,3 +311,156 @@ func GetClosestPointOnSegment(pt, segA, segB Point64) Point64 {
 		Y: segA.Y + int64(t*dy+0.5),
 	}
 }
+
+// ==============================================================================
+// 32-bit Coordinate Geometry Functions
+// ==============================================================================
+// These functions handle 32-bit coordinate types but use 64-bit intermediate
+// calculations to avoid overflow
+
+// CrossProduct64_32 calculates the cross product of vectors (p2-p1) and (p3-p1)
+// for 32-bit points, returning int64 result (no overflow possible)
+func CrossProduct64_32(p1, p2, p3 Point32) int64 {
+	// Calculate vectors (promote to int64)
+	v1x := int64(p2.X - p1.X)
+	v1y := int64(p2.Y - p1.Y)
+	v2x := int64(p3.X - p1.X)
+	v2y := int64(p3.Y - p1.Y)
+
+	// Cross product: v1x * v2y - v1y * v2x
+	// int32 * int32 fits in int64, so no overflow
+	return v1x*v2y - v1y*v2x
+}
+
+// CrossProductSign32 returns the sign of the cross product for 32-bit points
+// Returns: -1 if negative, 0 if zero, +1 if positive
+func CrossProductSign32(p1, p2, p3 Point32) int {
+	cp := CrossProduct64_32(p1, p2, p3)
+	if cp < 0 {
+		return -1
+	} else if cp == 0 {
+		return 0
+	}
+	return 1
+}
+
+// IsCollinear32 checks if three 32-bit points are collinear
+func IsCollinear32(p1, p2, p3 Point32) bool {
+	return CrossProduct64_32(p1, p2, p3) == 0
+}
+
+// IsParallel32 checks if two line segments are parallel (32-bit)
+func IsParallel32(seg1a, seg1b, seg2a, seg2b Point32) bool {
+	// Segments are parallel if cross product of direction vectors is zero
+	// Direction vector 1: (seg1b - seg1a)
+	// Direction vector 2: (seg2b - seg2a)
+	dx1 := int64(seg1b.X - seg1a.X)
+	dy1 := int64(seg1b.Y - seg1a.Y)
+	dx2 := int64(seg2b.X - seg2a.X)
+	dy2 := int64(seg2b.Y - seg2a.Y)
+
+	// Cross product of direction vectors
+	return dx1*dy2 == dy1*dx2
+}
+
+// WindingNumber32 computes the winding number for a point relative to a polygon (32-bit)
+// The winding number indicates how many times the polygon winds around the point
+func WindingNumber32(point Point32, polygon Path32) int {
+	wn := 0
+	n := len(polygon)
+
+	for i := 0; i < n; i++ {
+		p1 := polygon[i]
+		p2 := polygon[(i+1)%n]
+
+		if p1.Y <= point.Y {
+			if p2.Y > point.Y {
+				// Upward crossing
+				if CrossProduct64_32(p1, p2, point) > 0 {
+					wn++
+				}
+			}
+		} else {
+			if p2.Y <= point.Y {
+				// Downward crossing
+				if CrossProduct64_32(p1, p2, point) < 0 {
+					wn--
+				}
+			}
+		}
+	}
+
+	return wn
+}
+
+// PointInPolygon32 determines if a point is inside, outside, or on the boundary of a polygon (32-bit)
+func PointInPolygon32(point Point32, polygon Path32, fillRule FillRule) PolygonLocation {
+	if len(polygon) < 3 {
+		return Outside
+	}
+
+	wn := WindingNumber32(point, polygon)
+
+	// Check if point is on boundary (winding number unreliable for boundary points)
+	for i := 0; i < len(polygon); i++ {
+		p1 := polygon[i]
+		p2 := polygon[(i+1)%len(polygon)]
+
+		// Check if point is on edge segment
+		if IsCollinear32(p1, p2, point) {
+			// Point is collinear, check if it's between p1 and p2
+			minX := min32(p1.X, p2.X)
+			maxX := max32(p1.X, p2.X)
+			minY := min32(p1.Y, p2.Y)
+			maxY := max32(p1.Y, p2.Y)
+
+			if point.X >= minX && point.X <= maxX && point.Y >= minY && point.Y <= maxY {
+				return OnBoundary
+			}
+		}
+	}
+
+	// Apply fill rule to winding number
+	switch fillRule {
+	case EvenOdd:
+		if wn%2 != 0 {
+			return Inside
+		}
+	case NonZero:
+		if wn != 0 {
+			return Inside
+		}
+	case Positive:
+		if wn > 0 {
+			return Inside
+		}
+	case Negative:
+		if wn < 0 {
+			return Inside
+		}
+	}
+
+	return Outside
+}
+
+// Helper functions for 32-bit coordinates
+func min32(a, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max32(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minMax32(a, b int32) (int32, int32) {
+	if a < b {
+		return a, b
+	}
+	return b, a
+}

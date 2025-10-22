@@ -529,15 +529,16 @@ func (co *ClipperOffset) DoGroupOffset(group *offsetGroup) Paths64 {
 		co.BuildNormals(path)
 
 		// Route to appropriate offsetting method
-		if endType == EndPolygon {
+		switch endType {
+		case EndPolygon:
 			co.OffsetPolygon(group, path)
 			if len(co.pathOut) > 0 {
 				solution = append(solution, co.pathOut)
 			}
-		} else if endType == EndJoined {
+		case EndJoined:
 			result := co.OffsetOpenJoined(group, path)
 			solution = append(solution, result...)
-		} else {
+		default:
 			// EndButt, EndSquare, EndRound
 			result := co.OffsetOpenPath(group, path)
 			solution = append(solution, result...)

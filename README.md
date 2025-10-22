@@ -19,7 +19,8 @@ errors common in computational geometry.
   use (fully working)
 - **⚡ Robust Arithmetic**: 64-bit integer coordinates prevent numerical
   instability
-- **🎯 Complete API**: Public API defined and stable
+- **🎯 Complete API**: Public API defined and stable (see
+  [DEVIATIONS.md](DEVIATIONS.md) for differences from C++ Clipper2)
 - **🧪 Comprehensive Testing**: Property-based testing with fuzzing and golden
   reference validation
 - **📦 Easy Integration**: Simple Go module with clean, idiomatic API
@@ -284,26 +285,27 @@ func RectClip64(rect Path64, paths Paths64) (Paths64, error)  // Fast rectangula
 
 ## 📊 Implementation Status
 
-| Feature                | Pure Go | CGO Oracle | Status                         |
-| ---------------------- | ------- | ---------- | ------------------------------ |
-| **Core Utilities**     |         |            |                                |
-| Area Calculation       | ✅      | ✅         | Complete                       |
-| Orientation Detection  | ✅      | ✅         | Complete                       |
-| Path Reversal          | ✅      | ✅         | Complete                       |
-| Rectangle Clipping     | ✅      | ✅         | Complete (fuzz tested)         |
-| **Geometry Kernel**    |         |            |                                |
-| 128-bit Math           | ✅      | ✅         | Complete (production-ready)    |
-| Segment Intersection   | ✅      | ✅         | Complete (all edge cases)      |
-| Winding Numbers        | ✅      | ✅         | Complete (all fill rules)      |
-| Point-in-Polygon       | ✅      | ✅         | Complete                       |
-| **Boolean Operations** |         |            |                                |
-| Union64                | 🔧      | ✅         | Implemented (debugging needed) |
-| Intersect64            | 🔧      | ✅         | Implemented (debugging needed) |
-| Difference64           | 🔧      | ✅         | Implemented (debugging needed) |
-| Xor64                  | 🔧      | ✅         | Implemented (debugging needed) |
-| **Advanced Features**  |         |            |                                |
-| Polygon Offsetting     | ❌      | ✅         | Not started (planned M4)       |
-| Minkowski Sum/Diff     | ❌      | ❌         | Future (M5)                    |
+| Feature                | Pure Go | CGO Oracle | Status                        |
+| ---------------------- | ------- | ---------- | ----------------------------- |
+| **Core Utilities**     |         |            |                               |
+| Area Calculation       | ✅      | ✅         | Complete                      |
+| Orientation Detection  | ✅      | ✅         | Complete                      |
+| Path Reversal          | ✅      | ✅         | Complete                      |
+| Rectangle Clipping     | ✅      | ✅         | Complete (fuzz tested)        |
+| **Geometry Kernel**    |         |            |                               |
+| 128-bit Math           | ✅      | ✅         | Complete (production-ready)   |
+| Segment Intersection   | ✅      | ✅         | Complete (all edge cases)     |
+| Winding Numbers        | ✅      | ✅         | Complete (all fill rules)     |
+| Point-in-Polygon       | ✅      | ✅         | Complete                      |
+| **Boolean Operations** |         |            |                               |
+| Union64                | ✅      | ✅         | Complete (production-ready)   |
+| Intersect64            | ✅      | ✅         | Complete (production-ready)   |
+| Difference64           | ✅      | ✅         | Complete (production-ready)   |
+| Xor64                  | ✅      | ✅         | Complete (production-ready)   |
+| **Advanced Features**  |         |            |                               |
+| Polygon Offsetting     | ✅      | ✅         | Complete (all join/end types) |
+| Minkowski Sum/Diff     | ✅      | ✅         | Complete (2025-10-22)         |
+| Bounds/Simplify        | ✅      | ✅         | Complete                      |
 
 **Legend:**
 
@@ -311,9 +313,12 @@ func RectClip64(rect Path64, paths Paths64) (Paths64, error)  // Fast rectangula
 - 🔧 **Debugging** - Algorithm implemented but producing incorrect results
 - ❌ **Not Started** - Planned for future milestones
 
-**Note:** CGO oracle mode (`-tags=clipper_cgo`) is **100% functional** and
-production-ready. All 11/11 CGO tests passing. Pure Go is ~70% complete with
-Vatti algorithm implemented but requiring debugging.
+**Note:** Both pure Go and CGO oracle modes are **production-ready**! Pure Go
+implementation is ~98% complete with all core features working. CGO oracle mode
+provides 100% compatibility with C++ Clipper2.
+
+**Migrating from C++ Clipper2?** See [DEVIATIONS.md](DEVIATIONS.md) for a
+comprehensive migration guide and API differences.
 
 ## 🤝 Contributing & Development
 
@@ -423,6 +428,13 @@ CGO oracle handles memory management automatically. No manual cleanup required.
   operations
 - Pre-simplify complex polygons before operations
 - Consider polygon orientation for optimal performance
+
+## 📚 Documentation
+
+- **[DEVIATIONS.md](DEVIATIONS.md)** - Comprehensive guide to API differences
+  from C++ Clipper2
+- **[PLAN.md](PLAN.md)** - Implementation roadmap and current development status
+- **[CLAUDE.md](CLAUDE.md)** - Development guidelines for contributors
 
 ## 🔗 Related Projects
 

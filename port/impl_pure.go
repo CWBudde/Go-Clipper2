@@ -2,6 +2,8 @@
 
 package clipper
 
+import "math"
+
 // This file contains the main implementation entry points for the pure Go version
 // Complex algorithm details are organized into separate files for better maintainability
 
@@ -10,6 +12,25 @@ func booleanOp64Impl(clipType ClipType, fillRule FillRule, subjects, subjectsOpe
 	// Create and execute Vatti engine
 	engine := NewVattiEngine(clipType, fillRule)
 	return engine.ExecuteClipping(subjects, subjectsOpen, clips)
+}
+
+// booleanOp64TreeImpl performs boolean operations and returns a hierarchical PolyTree
+func booleanOp64TreeImpl(clipType ClipType, fillRule FillRule, subjects, clips Paths64) (*PolyTree64, Paths64, error) {
+	// Create and execute Vatti engine
+	engine := NewVattiEngine(clipType, fillRule)
+
+	// First run the clipping algorithm to populate output records
+	_, _, err := engine.ExecuteClipping(subjects, nil, clips)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Build the tree from output records
+	polytree := NewPolyTree64()
+	var openPaths Paths64
+	engine.BuildTree64(polytree, &openPaths)
+
+	return polytree, openPaths, nil
 }
 
 // inflatePathsImpl pure Go implementation using ClipperOffset
@@ -48,7 +69,19 @@ func simpleUnion(subjects, clips Paths64) Paths64 {
 	// For non-overlapping rectangles, this is correct
 	// For overlapping ones, this is a placeholder until full algorithm is implemented
 
-	result := make(Paths64, 0, len(subjects)+len(clips))
+	// Pre-allocate with exact capacity (memory optimization)
+	capacity := 0
+	for _, subject := range subjects {
+		if len(subject) >= 3 {
+			capacity++
+		}
+	}
+	for _, clip := range clips {
+		if len(clip) >= 3 {
+			capacity++
+		}
+	}
+	result := make(Paths64, 0, capacity)
 
 	// Add all subject polygons
 	for _, subject := range subjects {
@@ -101,8 +134,19 @@ func simpleDifference(subjects, _clips Paths64) Paths64 {
 
 // simpleXor implements basic XOR for rectangular cases
 func simpleXor(subjects, clips Paths64) Paths64 {
-	// Combine all polygons (simplified)
-	result := make(Paths64, 0, len(subjects)+len(clips))
+	// Pre-allocate with exact capacity (memory optimization)
+	capacity := 0
+	for _, subject := range subjects {
+		if len(subject) >= 3 {
+			capacity++
+		}
+	}
+	for _, clip := range clips {
+		if len(clip) >= 3 {
+			capacity++
+		}
+	}
+	result := make(Paths64, 0, capacity)
 
 	for _, subject := range subjects {
 		if len(subject) >= 3 {
@@ -179,6 +223,26 @@ func getPathBounds(path Path64) (left, right, top, bottom int64) {
 }
 
 // Note: Helper functions max64() and min64() are defined in geometry.go
+
+// minkowskiSum64Impl pure Go implementation
+func minkowskiSum64Impl(pattern, path Path64, isClosed bool) (Paths64, error) {
+	quads := minkowskiInternal(pattern, path, true, isClosed)
+	if len(quads) == 0 {
+		return Paths64{}, nil
+	}
+	// Apply union to merge overlapping quadrilaterals
+	return Union64(quads, nil, NonZero)
+}
+
+// minkowskiDiff64Impl pure Go implementation
+func minkowskiDiff64Impl(pattern, path Path64, isClosed bool) (Paths64, error) {
+	quads := minkowskiInternal(pattern, path, false, isClosed)
+	if len(quads) == 0 {
+		return Paths64{}, nil
+	}
+	// Apply union to merge overlapping quadrilaterals
+	return Union64(quads, nil, NonZero)
+}
 
 // bounds64Impl calculates the bounding rectangle of a single path
 // Reference: clipper.core.h GetBounds (lines 432-446)
@@ -401,4 +465,109 @@ func getPrior(curr, high int, flags []bool) int {
 	}
 
 	return prior
+}
+
+// rectClipLinesImpl is implemented in rectangle_clipping_lines.go
+// (declaration here for build tag compatibility)
+
+// ==============================================================================
+// Geometric Utility Functions Implementation
+// ==============================================================================
+
+func translatePath64Impl(path Path64, dx, dy int64) Path64 {
+	if len(path) == 0 {
+		return Path64{}
+	}
+
+	result := make(Path64, len(path))
+	for i, pt := range path {
+		result[i] = Point64{X: pt.X + dx, Y: pt.Y + dy}
+	}
+	return result
+}
+
+func translatePaths64Impl(paths Paths64, dx, dy int64) Paths64 {
+	if len(paths) == 0 {
+		return Paths64{}
+	}
+
+	result := make(Paths64, len(paths))
+	for i, path := range paths {
+		result[i] = translatePath64Impl(path, dx, dy)
+	}
+	return result
+}
+
+func ellipse64Impl(center Point64, radiusX, radiusY float64, steps int) Path64 {
+	return ellipse64(center, radiusX, radiusY, steps)
+}
+
+func scalePath64Impl(path Path64, scale float64) Path64 {
+	if len(path) == 0 {
+		return Path64{}
+	}
+
+	result := make(Path64, len(path))
+	for i, pt := range path {
+		result[i] = Point64{
+			X: int64(float64(pt.X) * scale),
+			Y: int64(float64(pt.Y) * scale),
+		}
+	}
+	return result
+}
+
+func rotatePath64Impl(path Path64, angleRad float64, center Point64) Path64 {
+	if len(path) == 0 {
+		return Path64{}
+	}
+
+	cosA := math.Cos(angleRad)
+	sinA := math.Sin(angleRad)
+
+	result := make(Path64, len(path))
+	for i, pt := range path {
+		// Translate to origin
+		dx := float64(pt.X - center.X)
+		dy := float64(pt.Y - center.Y)
+
+		// Rotate
+		newX := dx*cosA - dy*sinA
+		newY := dx*sinA + dy*cosA
+
+		// Translate back
+		result[i] = Point64{
+			X: center.X + int64(newX+0.5),
+			Y: center.Y + int64(newY+0.5),
+		}
+	}
+	return result
+}
+
+func starPolygon64Impl(center Point64, outerRadius, innerRadius float64, points int) Path64 {
+	if points < 3 || outerRadius <= 0 || innerRadius <= 0 {
+		return Path64{}
+	}
+
+	result := make(Path64, points*2)
+	angleStep := 2 * math.Pi / float64(points)
+
+	for i := 0; i < points; i++ {
+		angle := float64(i)*angleStep - math.Pi/2 // Start at top
+
+		// Outer point
+		result[i*2] = Point64{
+			X: center.X + int64(outerRadius*math.Cos(angle)+0.5),
+			Y: center.Y + int64(outerRadius*math.Sin(angle)+0.5),
+		}
+
+		// Inner point (halfway between current and next outer point)
+		innerAngle := angle + angleStep/2
+		result[i*2+1] = Point64{
+			X: center.X + int64(innerRadius*math.Cos(innerAngle)+0.5),
+			Y: center.Y + int64(innerRadius*math.Sin(innerAngle)+0.5),
+		}
+	}
+
+	return result
 }

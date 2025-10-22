@@ -69,6 +69,16 @@ int clipper2c_rectclip64(int64_t left, int64_t top, int64_t right, int64_t botto
                          const cpaths64* in_paths,
                          cpaths64* out_paths);
 
+int clipper2c_minkowski_sum64(const cpath64* pattern, const cpath64* path,
+                              int is_closed, cpaths64* out_paths);
+
+int clipper2c_minkowski_diff64(const cpath64* pattern, const cpath64* path,
+                               int is_closed, cpaths64* out_paths);
+
+int clipper2c_rectcliplines64(int64_t left, int64_t top, int64_t right, int64_t bottom,
+                              const cpaths64* in_paths,
+                              cpaths64* out_paths);
+
 // Frees anything allocated in cpaths64 (deep).
 void clipper2c_free_paths(cpaths64* p);
 

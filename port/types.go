@@ -75,6 +75,79 @@ func (r Rect64) Intersects(other Rect64) bool {
 		max64(r.Top, other.Top) <= min64(r.Bottom, other.Bottom)
 }
 
+// ==============================================================================
+// 32-bit Coordinate Types
+// ==============================================================================
+// These types provide API compatibility with 32-bit graphics libraries and systems.
+// Internally, operations are performed in 64-bit for numerical stability, with
+// automatic overflow detection when converting results back to 32-bit.
+
+// Point32 represents a point with 32-bit integer coordinates
+type Point32 struct {
+	X, Y int32
+}
+
+// Path32 represents a sequence of points forming a path
+type Path32 []Point32
+
+// Paths32 represents a collection of paths
+type Paths32 []Path32
+
+// Rect32 represents a rectangle with 32-bit integer coordinates
+type Rect32 struct {
+	Left, Top, Right, Bottom int32
+}
+
+// Width returns the width of the rectangle
+func (r Rect32) Width() int32 {
+	return r.Right - r.Left
+}
+
+// Height returns the height of the rectangle
+func (r Rect32) Height() int32 {
+	return r.Bottom - r.Top
+}
+
+// MidPoint returns the center point of the rectangle
+func (r Rect32) MidPoint() Point32 {
+	return Point32{
+		X: (r.Left + r.Right) / 2,
+		Y: (r.Top + r.Bottom) / 2,
+	}
+}
+
+// AsPath converts a rectangle to a path (4 points in counter-clockwise order)
+func (r Rect32) AsPath() Path32 {
+	return Path32{
+		{X: r.Left, Y: r.Top},
+		{X: r.Right, Y: r.Top},
+		{X: r.Right, Y: r.Bottom},
+		{X: r.Left, Y: r.Bottom},
+	}
+}
+
+// Contains checks if a point is inside the rectangle (exclusive of boundaries)
+func (r Rect32) Contains(pt Point32) bool {
+	return pt.X > r.Left && pt.X < r.Right && pt.Y > r.Top && pt.Y < r.Bottom
+}
+
+// ContainsRect checks if another rectangle is fully contained within this rectangle
+func (r Rect32) ContainsRect(other Rect32) bool {
+	return other.Left >= r.Left && other.Right <= r.Right &&
+		other.Top >= r.Top && other.Bottom <= r.Bottom
+}
+
+// IsEmpty returns true if the rectangle has zero or negative area
+func (r Rect32) IsEmpty() bool {
+	return r.Bottom <= r.Top || r.Right <= r.Left
+}
+
+// Intersects checks if this rectangle intersects with another rectangle
+func (r Rect32) Intersects(other Rect32) bool {
+	return max32(r.Left, other.Left) <= min32(r.Right, other.Right) &&
+		max32(r.Top, other.Top) <= min32(r.Bottom, other.Bottom)
+}
+
 // ClipType specifies the type of boolean operation
 type ClipType uint8
 
@@ -191,9 +264,9 @@ type OutRec struct {
 	FrontEdge *Edge   // front edge (for tracking which side adds to front of list)
 	BackEdge  *Edge   // back edge (for tracking which side adds to back of list)
 	State     OutRecState
-	Pts       *OutPt    // linked list of output points
-	BottomPt  *OutPt    // bottommost point
-	PolyPath  *PolyPath // hierarchical path structure
+	Pts       *OutPt      // linked list of output points
+	BottomPt  *OutPt      // bottommost point
+	PolyPath  *PolyPath64 // hierarchical path structure (see polytree.go)
 }
 
 // OutRecState represents the state of an output record
@@ -214,13 +287,6 @@ type OutPt struct {
 	Idx  int     // index for debugging
 }
 
-// PolyPath represents a hierarchical polygon path structure
-type PolyPath struct {
-	Path     Path64      // the polygon path
-	Children []*PolyPath // child paths (holes)
-	Parent   *PolyPath   // parent path
-}
-
 // Clipper64 implements the Vatti polygon clipping algorithm
 type Clipper64 struct {
 	_minimaList     *LocalMinima // sorted list of local minima
@@ -229,4 +295,104 @@ type Clipper64 struct {
 	_outRecList     []*OutRec    // list of output records
 	_fillRule       FillRule     // fill rule for polygon interiors
 	_clipType       ClipType     // boolean operation type
+}
+
+// ==============================================================================
+// Validation Helper Functions
+// ==============================================================================
+
+// validateFillRule checks if a fill rule is valid
+func validateFillRule(fillRule FillRule) error {
+	if fillRule > Negative {
+		return ErrInvalidFillRule
+	}
+	return nil
+}
+
+// validateClipType checks if a clip type is valid
+func validateClipType(clipType ClipType) error {
+	if clipType > Xor {
+		return ErrInvalidClipType
+	}
+	return nil
+}
+
+// validateJoinType checks if a join type is valid
+func validateJoinType(joinType JoinType) error {
+	if joinType > JoinMiter {
+		return ErrInvalidJoinType
+	}
+	return nil
+}
+
+// validateEndType checks if an end type is valid
+func validateEndType(endType EndType) error {
+	if endType > EndRound {
+		return ErrInvalidEndType
+	}
+	return nil
+}
+
+// filterValidPaths removes nil and degenerate paths (< 3 points for closed paths)
+// Returns filtered paths and a boolean indicating if any paths were filtered
+func filterValidPaths(paths Paths64, minPoints int) (Paths64, bool) {
+	if paths == nil {
+		return Paths64{}, false
+	}
+
+	filtered := make(Paths64, 0, len(paths))
+	hadInvalid := false
+
+	for _, path := range paths {
+		if path != nil && len(path) >= minPoints {
+			filtered = append(filtered, path)
+		} else if len(path) < minPoints && len(path) > 0 {
+			hadInvalid = true
+		}
+	}
+
+	return filtered, hadInvalid
+}
+
+// validatePath checks if a path is valid for operations requiring closed polygons
+func validatePath(path Path64, minPoints int) error {
+	if len(path) == 0 {
+		return ErrEmptyPath
+	}
+	if len(path) < minPoints {
+		return ErrDegeneratePolygon
+	}
+	return nil
+}
+
+// filterValidPaths32 removes nil and degenerate paths (< 3 points for closed paths)
+// Returns filtered paths and a boolean indicating if any paths were filtered
+func filterValidPaths32(paths Paths32, minPoints int) (Paths32, bool) {
+	if paths == nil {
+		return Paths32{}, false
+	}
+
+	filtered := make(Paths32, 0, len(paths))
+	hadInvalid := false
+
+	for _, path := range paths {
+		if path != nil && len(path) >= minPoints {
+			filtered = append(filtered, path)
+		} else if len(path) < minPoints && len(path) > 0 {
+			hadInvalid = true
+		}
+	}
+
+	return filtered, hadInvalid
+}
+
+// validatePath32 checks if a path is valid for operations requiring closed polygons
+func validatePath32(path Path32, minPoints int) error {
+	if len(path) == 0 {
+		return ErrEmptyPath
+	}
+	if len(path) < minPoints {
+		return ErrDegeneratePolygon
+	}
+	return nil
 }

@@ -166,13 +166,7 @@ func TestIntersectCompleteOverlap(t *testing.T) {
 // TestIntersectSelfIntersecting tests a self-intersecting polygon (figure-8)
 func TestIntersectSelfIntersecting(t *testing.T) {
 	// Enable debug for this complex case
-	VattiDebug = true
 	debugBuf := &bytes.Buffer{}
-	VattiDebugOutput = debugBuf
-	defer func() {
-		VattiDebug = false
-		VattiDebugOutput = nil
-	}()
 
 	// Figure-8 polygon (self-intersecting at center)
 	// Forms two loops: left (0,0)-(5,0)-(0,10)-(5,10) and right (5,0)-(10,0)-(10,10)-(5,10)

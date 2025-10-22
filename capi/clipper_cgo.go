@@ -23,6 +23,27 @@ var ErrClipper = errors.New("clipper2c error")
 
 // --- pack/unpack between Go Paths64 and cpaths64 (AoS) -----------------------
 
+func toCPath64(p Path64) (C.cpath64, func()) {
+	var cp C.cpath64
+	n := len(p)
+	cp.len = C.int(n)
+	if n == 0 {
+		return cp, func() {}
+	}
+	cp.pts = (*C.cpt64)(C.malloc(C.size_t(n) * C.size_t(unsafe.Sizeof(C.cpt64{}))))
+	pts := unsafe.Slice(cp.pts, n)
+	for i, pt := range p {
+		pts[i].x = C.int64_t(pt.X)
+		pts[i].y = C.int64_t(pt.Y)
+	}
+	cleanup := func() {
+		if cp.pts != nil {
+			C.free(unsafe.Pointer(cp.pts))
+		}
+	}
+	return cp, cleanup
+}
+
 func toCPaths64(ps Paths64) (C.cpaths64, func()) {
 	var cp C.cpaths64
 	n := len(ps)
@@ -157,6 +178,83 @@ func RectClip64(rect Path64, paths Paths64) (Paths64, error) {
 
 	var out C.cpaths64
 	rc := C.clipper2c_rectclip64(
+		C.int64_t(l), C.int64_t(t), C.int64_t(r), C.int64_t(b),
+		&cp, &out,
+	)
+	if rc != 0 {
+		return nil, ErrClipper
+	}
+	defer C.clipper2c_free_paths(&out)
+
+	return fromCPaths64(&out), nil
+}
+
+func MinkowskiSum64(pattern, path Path64, isClosed bool) (Paths64, error) {
+	cpattern, cleanPattern := toCPath64(pattern)
+	defer cleanPattern()
+	cpath, cleanPath := toCPath64(path)
+	defer cleanPath()
+
+	var out C.cpaths64
+	isClosed_c := C.int(0)
+	if isClosed {
+		isClosed_c = C.int(1)
+	}
+	rc := C.clipper2c_minkowski_sum64(&cpattern, &cpath, isClosed_c, &out)
+	if rc != 0 {
+		return nil, ErrClipper
+	}
+	defer C.clipper2c_free_paths(&out)
+
+	return fromCPaths64(&out), nil
+}
+
+func MinkowskiDiff64(pattern, path Path64, isClosed bool) (Paths64, error) {
+	cpattern, cleanPattern := toCPath64(pattern)
+	defer cleanPattern()
+	cpath, cleanPath := toCPath64(path)
+	defer cleanPath()
+
+	var out C.cpaths64
+	isClosed_c := C.int(0)
+	if isClosed {
+		isClosed_c = C.int(1)
+	}
+	rc := C.clipper2c_minkowski_diff64(&cpattern, &cpath, isClosed_c, &out)
+	if rc != 0 {
+		return nil, ErrClipper
+	}
+	defer C.clipper2c_free_paths(&out)
+
+	return fromCPaths64(&out), nil
+}
+
+func RectClipLines64(rect Path64, paths Paths64) (Paths64, error) {
+	if len(rect) < 2 {
+		return nil, errors.New("rect needs 2+ points (lt rb) or a bbox poly")
+	}
+	// compute bbox
+	l, t, r, b := rect[0].X, rect[0].Y, rect[0].X, rect[0].Y
+	for _, p := range rect {
+		if p.X < l {
+			l = p.X
+		}
+		if p.X > r {
+			r = p.X
+		}
+		if p.Y < t {
+			t = p.Y
+		}
+		if p.Y > b {
+			b = p.Y
+		}
+	}
+
+	cp, clean := toCPaths64(paths)
+	defer clean()
+
+	var out C.cpaths64
+	rc := C.clipper2c_rectcliplines64(
 		C.int64_t(l), C.int64_t(t), C.int64_t(r), C.int64_t(b),
 		&cp, &out,
 	)

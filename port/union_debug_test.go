@@ -6,12 +6,6 @@ import (
 
 // TestUnion64BasicDebug tests union with debug output
 func TestUnion64BasicDebug(t *testing.T) {
-	// Enable debug logging - write to stdout directly to see logs before timeout
-	VattiDebug = true
-	defer func() {
-		VattiDebug = false
-	}()
-
 	// Two overlapping rectangles
 	subject := Paths64{{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}
 	clip := Paths64{{{5, 5}, {15, 5}, {15, 15}, {5, 15}}}
